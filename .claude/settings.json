@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install node-pty)",
+      "Bash(npm install @xterm/xterm @xterm/addon-fit @xterm/addon-web-links)",
+      "Bash(netstat -ano)",
+      "Bash(taskkill //PID 26716 //F)",
+      "Bash(taskkill //PID 32572 //F)",
+      "Bash(taskkill //PID 31284 //F)"
+    ]
+  }
+}

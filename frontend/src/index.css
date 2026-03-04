@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+
+  /* Paleta oscura "Captain's Bridge" */
+  --color-bridge-950: #0a0e14;
+  --color-bridge-900: #0d1117;
+  --color-bridge-800: #161b22;
+  --color-bridge-700: #21262d;
+  --color-bridge-600: #30363d;
+  --color-bridge-500: #484f58;
+  --color-bridge-400: #8b949e;
+  --color-bridge-300: #c9d1d9;
+  --color-bridge-200: #e6edf3;
+  --color-bridge-100: #f0f6fc;
+
+  /* Acentos terminales */
+  --color-cyan-glow: #00d4ff;
+  --color-green-glow: #00ff88;
+  --color-amber-glow: #ffaa00;
+  --color-red-glow: #ff4444;
+  --color-purple-glow: #b388ff;
+}
+
+body {
+  background-color: var(--color-bridge-950);
+  color: var(--color-bridge-300);
+  font-family: var(--font-sans);
+}
+
+/* Scrollbar estilo terminal */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--color-bridge-950); }
+::-webkit-scrollbar-thumb { background: var(--color-bridge-700); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-bridge-600); }
+
+/* Animación de pulso para status */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; box-shadow: 0 0 8px currentColor; }
+  50% { opacity: 0.5; box-shadow: 0 0 2px currentColor; }
+}
+
+.animate-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* xterm.js — integración con tema bridge */
+.xterm { height: 100%; }
+.xterm-viewport::-webkit-scrollbar { width: 6px; }
+.xterm-viewport::-webkit-scrollbar-track { background: var(--color-bridge-950); }
+.xterm-viewport::-webkit-scrollbar-thumb { background: var(--color-bridge-700); border-radius: 3px; }
+
+/* Efecto de scanline sutil */
+@keyframes scanline {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100vh); }
+}
