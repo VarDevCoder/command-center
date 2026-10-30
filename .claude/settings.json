@@ -6,7 +6,8 @@
       "Bash(netstat -ano)",
       "Bash(taskkill //PID 26716 //F)",
       "Bash(taskkill //PID 32572 //F)",
-      "Bash(taskkill //PID 31284 //F)"
+      "Bash(taskkill //PID 31284 //F)",
+      "ClaudeInChromeDomain(localhost:5166)"
     ]
   }
 }

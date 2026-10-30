@@ -1,6 +1,6 @@
 // Mission Control — Lanzar nuevos agentes
-import { useState, useEffect } from 'react';
-import { Rocket, Zap } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Rocket, Lock, Globe, Download, HardDrive, RefreshCw } from 'lucide-react';
 import { agentApi, projectApi } from '../services/api.js';
 import Card from '../components/common/Card.jsx';
 import toast from 'react-hot-toast';
@@ -19,86 +19,159 @@ const QUICK_MISSIONS = [
 export default function MissionPage() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
   const [form, setForm] = useState({
-    projectDir: '',
+    repo: '',
     model: 'sonnet',
     prompt: '',
   });
   const [submitting, setSubmitting] = useState(false);
+  const [scan, setScan] = useState({ status: 'idle', reposFound: 0 });
+  const pollRef = useRef(null);
 
-  // Cargar lista de proyectos
-  useEffect(() => {
+  const loadProjects = () => {
     projectApi.list()
       .then((data) => {
         setProjects(data);
-        if (data.length > 0) {
-          setForm((prev) => ({ ...prev, projectDir: data[0].dir }));
-        }
+        setForm((prev) => (prev.repo ? prev : { ...prev, repo: data[0]?.fullName || '' }));
       })
-      .catch(() => toast.error('Error cargando proyectos'));
+      .catch(() => toast.error('Error cargando repos de GitHub'))
+      .finally(() => setLoadingProjects(false));
+  };
+
+  const pollScan = () => {
+    clearTimeout(pollRef.current);
+    projectApi.scanStatus().then((s) => {
+      setScan(s);
+      if (s.status === 'scanning') {
+        pollRef.current = setTimeout(pollScan, 3000);
+      } else {
+        loadProjects(); // el escaneo terminó: refrescar qué está clonado
+      }
+    }).catch(() => {});
+  };
+
+  // Cargar lista de repos desde GitHub + seguir el escaneo de disco en background
+  useEffect(() => {
+    loadProjects();
+    pollScan();
+    return () => clearTimeout(pollRef.current);
   }, []);
+
+  const handleRescan = () => {
+    setScan((prev) => ({ ...prev, status: 'scanning' }));
+    projectApi.rescan().then(pollScan);
+  };
+
+  const selectedProject = projects.find((p) => p.fullName === form.repo);
+
+  // Asegura que el repo esté clonado localmente y devuelve su directorio
+  const resolveProjectDir = async () => {
+    if (!selectedProject) throw new Error('Selecciona un repo primero');
+    if (selectedProject.clonedLocally) return selectedProject.dir;
+
+    const cloning = toast.loading(`Clonando ${selectedProject.name}...`);
+    try {
+      const { dir } = await projectApi.clone({
+        fullName: selectedProject.fullName,
+        name: selectedProject.name,
+      });
+      toast.success(`${selectedProject.name} clonado`, { id: cloning });
+      setProjects((prev) =>
+        prev.map((p) => (p.fullName === selectedProject.fullName ? { ...p, clonedLocally: true } : p))
+      );
+      return dir;
+    } catch (err) {
+      toast.error(`No se pudo clonar: ${err.message}`, { id: cloning });
+      throw err;
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.prompt.trim() || !form.projectDir) return;
+    if (!form.prompt.trim() || !form.repo) return;
 
     setSubmitting(true);
     try {
+      const projectDir = await resolveProjectDir();
       const agent = await agentApi.spawn({
         prompt: form.prompt.trim(),
-        projectDir: form.projectDir,
+        projectDir,
         model: form.model,
       });
       toast.success('Agente lanzado');
       navigate(`/agent/${agent.id}`);
     } catch (err) {
-      toast.error(err.message);
+      if (err.message) toast.error(err.message);
     } finally {
       setSubmitting(false);
     }
   };
 
   const handleQuickMission = async (mission) => {
-    if (!form.projectDir) {
-      toast.error('Selecciona un proyecto primero');
+    if (!form.repo) {
+      toast.error('Selecciona un repo primero');
       return;
     }
 
     setSubmitting(true);
     try {
+      const projectDir = await resolveProjectDir();
       const agent = await agentApi.spawn({
         prompt: mission.prompt,
-        projectDir: form.projectDir,
+        projectDir,
         model: 'haiku',
       });
       toast.success(`Misión "${mission.label}" lanzada`);
       navigate(`/agent/${agent.id}`);
     } catch (err) {
-      toast.error(err.message);
+      if (err.message) toast.error(err.message);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="max-w-3xl mx-auto space-y-6">
+    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
       {/* Formulario principal */}
-      <Card title="Launch New Agent">
+      <div className="xl:col-span-2">
+      <Card title="Launch New Agent" action={
+        scan.status === 'scanning' ? (
+          <span className="flex items-center gap-1.5 text-[10px] font-mono text-bridge-500">
+            <HardDrive className="w-3 h-3 animate-pulse" />
+            Escaneando disco... ({scan.reposFound} encontrados)
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={handleRescan}
+            className="flex items-center gap-1.5 text-[10px] font-mono text-bridge-500 hover:text-cyan-glow transition-colors"
+            title="Re-escanear el disco en busca de repos clonados"
+          >
+            <RefreshCw className="w-3 h-3" />
+            {scan.reposFound} repos locales
+          </button>
+        )
+      }>
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* Proyecto */}
+          {/* Proyecto (repo de GitHub) */}
           <div>
             <label className="block font-mono text-xs text-bridge-400 mb-1.5 uppercase tracking-wider">
-              Project
+              Repository
             </label>
             <select
-              value={form.projectDir}
-              onChange={(e) => setForm({ ...form, projectDir: e.target.value })}
+              value={form.repo}
+              onChange={(e) => setForm({ ...form, repo: e.target.value })}
+              disabled={loadingProjects}
               className="w-full bg-bridge-950 border border-bridge-700 rounded-lg px-3 py-2
-                text-sm font-mono text-bridge-200 focus:outline-none focus:border-cyan-glow/50"
+                text-sm font-mono text-bridge-200 focus:outline-none focus:border-cyan-glow/50
+                disabled:opacity-50"
             >
+              {loadingProjects && <option>Cargando repos de GitHub...</option>}
+              {!loadingProjects && projects.length === 0 && <option>Sin repos encontrados</option>}
               {projects.map((p) => (
-                <option key={p.dir} value={p.dir}>
-                  {p.name} {p.hasBackend ? '📦' : ''} {p.hasFrontend ? '🎨' : ''}
+                <option key={p.fullName} value={p.fullName}>
+                  {p.name} {p.isPrivate ? '🔒' : ''} {p.clonedLocally ? '' : '(sin clonar)'}
                 </option>
               ))}
             </select>
@@ -157,31 +230,64 @@ export default function MissionPage() {
           </button>
         </form>
       </Card>
+      </div>
 
-      {/* Misiones rápidas */}
-      <Card title="Quick Missions">
-        <div className="p-5 grid grid-cols-2 md:grid-cols-3 gap-3">
-          {QUICK_MISSIONS.map((mission) => (
-            <button
-              key={mission.label}
-              onClick={() => handleQuickMission(mission)}
-              disabled={submitting}
-              className="flex items-center gap-2 px-3 py-3 rounded-lg
-                bg-bridge-800 border border-bridge-700 text-bridge-300
-                hover:border-bridge-600 hover:bg-bridge-700/50
-                disabled:opacity-30 transition-colors text-left"
-            >
-              <span className="text-lg">{mission.icon}</span>
-              <div>
-                <p className="font-mono text-xs font-medium">{mission.label}</p>
-                <p className="text-[10px] text-bridge-500 mt-0.5 line-clamp-1">
-                  {mission.prompt}
-                </p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </Card>
+      {/* Columna lateral: proyecto seleccionado + misiones rápidas */}
+      <div className="space-y-6">
+        <Card title="Project Info">
+          <div className="p-4 space-y-2">
+            {selectedProject ? (
+              <>
+                <p className="font-mono text-sm text-cyan-glow truncate">{selectedProject.fullName}</p>
+                {selectedProject.description && (
+                  <p className="text-xs text-bridge-400">{selectedProject.description}</p>
+                )}
+                <p className="font-mono text-[11px] text-bridge-500 break-all">{selectedProject.dir}</p>
+                <div className="flex gap-2 pt-2 flex-wrap">
+                  <span className="flex items-center gap-1 px-2 py-1 rounded bg-bridge-800 border border-bridge-700 text-[10px] font-mono text-bridge-300">
+                    {selectedProject.isPrivate ? <Lock className="w-3 h-3" /> : <Globe className="w-3 h-3" />}
+                    {selectedProject.isPrivate ? 'Private' : 'Public'}
+                  </span>
+                  <span className={`flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-mono ${
+                    selectedProject.clonedLocally
+                      ? 'bg-bridge-800 border-bridge-700 text-bridge-300'
+                      : 'bg-amber-glow/10 border-amber-glow/30 text-amber-glow'
+                  }`}>
+                    {!selectedProject.clonedLocally && <Download className="w-3 h-3" />}
+                    {selectedProject.clonedLocally ? 'Cloned' : 'Not cloned yet'}
+                  </span>
+                </div>
+              </>
+            ) : (
+              <p className="font-mono text-xs text-bridge-500">Selecciona un repo</p>
+            )}
+          </div>
+        </Card>
+
+        <Card title="Quick Missions">
+          <div className="p-4 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-3">
+            {QUICK_MISSIONS.map((mission) => (
+              <button
+                key={mission.label}
+                onClick={() => handleQuickMission(mission)}
+                disabled={submitting}
+                className="flex items-center gap-2 px-3 py-3 rounded-lg
+                  bg-bridge-800 border border-bridge-700 text-bridge-300
+                  hover:border-bridge-600 hover:bg-bridge-700/50
+                  disabled:opacity-30 transition-colors text-left"
+              >
+                <span className="text-lg">{mission.icon}</span>
+                <div className="min-w-0">
+                  <p className="font-mono text-xs font-medium">{mission.label}</p>
+                  <p className="text-[10px] text-bridge-500 mt-0.5 line-clamp-1">
+                    {mission.prompt}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

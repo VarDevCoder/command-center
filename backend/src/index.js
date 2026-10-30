@@ -9,10 +9,13 @@ import sessionsRouter from './routes/sessions.js';
 import projectsRouter from './routes/projects.js';
 import agentsRouter, { setAgentManager } from './routes/agents.js';
 import terminalsRouter, { setTerminalManager } from './routes/terminals.js';
+import violetRouter from './routes/violet.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { SessionWatcher } from './services/sessionWatcher.js';
 import { AgentManager } from './services/agentManager.js';
 import { TerminalManager } from './services/terminalManager.js';
+import { repoLocator } from './services/repoLocator.js';
+import { violetService } from './services/violetService.js';
 import { createLogger } from './utils/logger.js';
 
 const log = createLogger('Server');
@@ -47,6 +50,7 @@ app.use('/api/v1/sessions', sessionsRouter);
 app.use('/api/v1/projects', projectsRouter);
 app.use('/api/v1/agents', agentsRouter);
 app.use('/api/v1/terminals', terminalsRouter);
+app.use('/api/v1/violet', violetRouter);
 
 // Health check
 app.get('/api/v1/health', (req, res) => {
@@ -139,8 +143,14 @@ terminalManager.on('spawned', (terminal) => {
   io.emit('terminal:spawned', terminal);
 });
 
+// Violet -> Socket.IO
+violetService.on('message', (msg) => {
+  io.emit('violet:message', msg);
+});
+
 // === Iniciar ===
 sessionWatcher.start();
+repoLocator.startScan();
 
 httpServer.listen(PORT, () => {
   log.info(`Command Center backend en http://localhost:${PORT}`);

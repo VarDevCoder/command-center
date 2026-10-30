@@ -6,6 +6,7 @@ import AgentDetailPage from './pages/AgentDetailPage.jsx';
 import MissionPage from './pages/MissionPage.jsx';
 import HistoryPage from './pages/HistoryPage.jsx';
 import TerminalPage from './pages/TerminalPage.jsx';
+import VioletPage from './pages/VioletPage.jsx';
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="launch" element={<MissionPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="history/:sessionId" element={<AgentDetailPage />} />
+        <Route path="violet" element={<VioletPage />} />
       </Route>
     </Routes>
   );

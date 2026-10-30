@@ -29,6 +29,9 @@ export const sessionApi = {
 
 export const projectApi = {
   list: () => request('/projects'),
+  clone: (body) => request('/projects/clone', { method: 'POST', body: JSON.stringify(body) }),
+  scanStatus: () => request('/projects/scan-status'),
+  rescan: () => request('/projects/rescan', { method: 'POST' }),
 };
 
 export const terminalApi = {
@@ -40,4 +43,9 @@ export const terminalApi = {
 
 export const healthApi = {
   check: () => request('/health'),
+};
+
+export const violetApi = {
+  history: () => request('/violet/history'),
+  chat: (text) => request('/violet/chat', { method: 'POST', body: JSON.stringify({ text }) }),
 };

@@ -6,10 +6,12 @@ import {
   Rocket,
   History,
   Radio,
+  Sparkles,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutGrid, label: 'Bridge', end: true },
+  { to: '/violet', icon: Sparkles, label: 'Violet' },
   { to: '/terminals', icon: TerminalSquare, label: 'Terminals' },
   { to: '/launch', icon: Rocket, label: 'Mission' },
   { to: '/history', icon: History, label: 'History' },
