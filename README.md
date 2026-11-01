@@ -27,3 +27,5 @@ cd frontend && npm install && npm run dev
 - chokidar vigila cambios en archivos en tiempo real
 - Socket.IO transmite logs al frontend via WebSocket
 - Agentes se lanzan con `claude --print --output-format stream-json`
+
+Probado por el pipeline supervisado el 2026-11-01, intento 2.
