@@ -16,13 +16,30 @@ const QUICK_MISSIONS = [
   { label: 'DB Status', prompt: 'Check database connection and run pending migrations if any', icon: '🗄️' },
 ];
 
+// Proveedores disponibles para lanzar agentes
+const PROVIDERS = {
+  claude: { label: 'Claude', models: ['haiku', 'sonnet', 'opus'], efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
+  codex: { label: 'Codex / GPT', models: ['gpt-5.4'], efforts: ['none', 'low', 'medium', 'high', 'xhigh'] },
+  ollama: { label: 'Ollama (local)', models: ['qwen2.5-coder:7b', 'qwen2.5vl:7b', 'qwen2.5vl:32b'], efforts: null },
+};
+
+// Misma heurística que el backend (gitSupervision.js::looksLikeModification)
+// — solo para mostrar el aviso antes de enviar, el backend decide de verdad.
+const MODIFY_KEYWORDS = /\b(arregl\w*|implement\w*|agreg\w*|a[ñn]ad\w*|modific\w*|refactoriz\w*|elimin\w*|borr\w*|cre\w*|instal\w*|actualiz\w*|cambi\w*|corrig\w*|escrib\w*|mov\w*|renombr\w*|sobreescrib\w*|configur\w*|despleg\w*|optimiz\w*|limpi\w*)\w*\b/i;
+
+function looksLikeModification(prompt) {
+  return MODIFY_KEYWORDS.test(prompt || '');
+}
+
 export default function MissionPage() {
   const navigate = useNavigate();
   const [projects, setProjects] = useState([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
   const [form, setForm] = useState({
     repo: '',
+    provider: 'claude',
     model: 'sonnet',
+    effort: '',
     prompt: '',
   });
   const [submitting, setSubmitting] = useState(false);
@@ -65,6 +82,15 @@ export default function MissionPage() {
 
   const selectedProject = projects.find((p) => p.fullName === form.repo);
 
+  const handleProviderChange = (provider) => {
+    setForm((prev) => ({
+      ...prev,
+      provider,
+      model: PROVIDERS[provider].models[0],
+      effort: '',
+    }));
+  };
+
   // Asegura que el repo esté clonado localmente y devuelve su directorio
   const resolveProjectDir = async () => {
     if (!selectedProject) throw new Error('Selecciona un repo primero');
@@ -97,7 +123,10 @@ export default function MissionPage() {
       const agent = await agentApi.spawn({
         prompt: form.prompt.trim(),
         projectDir,
+        provider: form.provider,
         model: form.model,
+        effort: form.effort || undefined,
+        repoFullName: selectedProject?.fullName,
       });
       toast.success('Agente lanzado');
       navigate(`/agent/${agent.id}`);
@@ -120,7 +149,9 @@ export default function MissionPage() {
       const agent = await agentApi.spawn({
         prompt: mission.prompt,
         projectDir,
+        provider: 'claude',
         model: 'haiku',
+        repoFullName: selectedProject?.fullName,
       });
       toast.success(`Misión "${mission.label}" lanzada`);
       navigate(`/agent/${agent.id}`);
@@ -177,13 +208,41 @@ export default function MissionPage() {
             </select>
           </div>
 
+          {/* Proveedor */}
+          <div>
+            <label className="block font-mono text-xs text-bridge-400 mb-1.5 uppercase tracking-wider">
+              Provider
+            </label>
+            <div className="flex gap-2">
+              {Object.entries(PROVIDERS).map(([key, p]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleProviderChange(key)}
+                  className={`flex-1 py-2 px-3 rounded-lg font-mono text-sm border transition-colors ${
+                    form.provider === key
+                      ? 'bg-cyan-glow/10 border-cyan-glow/50 text-cyan-glow'
+                      : 'bg-bridge-950 border-bridge-700 text-bridge-400 hover:border-bridge-600'
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+            {form.provider === 'ollama' && (
+              <p className="text-[10px] text-amber-glow mt-1.5">
+                Ollama siempre corre en modo protegido: worktree aislado + revisión obligatoria de Claude antes de poder mergearse.
+              </p>
+            )}
+          </div>
+
           {/* Modelo */}
           <div>
             <label className="block font-mono text-xs text-bridge-400 mb-1.5 uppercase tracking-wider">
               Model
             </label>
-            <div className="flex gap-2">
-              {['haiku', 'sonnet', 'opus'].map((m) => (
+            <div className="flex gap-2 flex-wrap">
+              {PROVIDERS[form.provider].models.map((m) => (
                 <button
                   key={m}
                   type="button"
@@ -200,6 +259,31 @@ export default function MissionPage() {
             </div>
           </div>
 
+          {/* Effort (solo si el proveedor lo soporta) */}
+          {PROVIDERS[form.provider].efforts && (
+            <div>
+              <label className="block font-mono text-xs text-bridge-400 mb-1.5 uppercase tracking-wider">
+                Effort
+              </label>
+              <div className="flex gap-2 flex-wrap">
+                {PROVIDERS[form.provider].efforts.map((ef) => (
+                  <button
+                    key={ef}
+                    type="button"
+                    onClick={() => setForm({ ...form, effort: form.effort === ef ? '' : ef })}
+                    className={`flex-1 py-1.5 px-2 rounded-lg font-mono text-xs border transition-colors ${
+                      form.effort === ef
+                        ? 'bg-purple-glow/10 border-purple-glow/50 text-purple-glow'
+                        : 'bg-bridge-950 border-bridge-700 text-bridge-400 hover:border-bridge-600'
+                    }`}
+                  >
+                    {ef}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Prompt */}
           <div>
             <label className="block font-mono text-xs text-bridge-400 mb-1.5 uppercase tracking-wider">
@@ -214,6 +298,11 @@ export default function MissionPage() {
                 text-sm font-mono text-green-glow placeholder-bridge-600
                 focus:outline-none focus:border-cyan-glow/50 resize-none"
             />
+            {form.provider !== 'ollama' && looksLikeModification(form.prompt) && (
+              <p className="text-[10px] text-amber-glow mt-1.5">
+                Este prompt activará el modo protegido: rama aislada + revisión + Pull Request antes de poder mergearse.
+              </p>
+            )}
           </div>
 
           {/* Submit */}

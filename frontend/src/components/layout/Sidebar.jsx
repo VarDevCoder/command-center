@@ -1,19 +1,22 @@
 // Sidebar de navegación — estilo Captain's Bridge
 import { NavLink } from 'react-router-dom';
+import VioletAvatar from '../common/VioletAvatar.jsx';
 import {
   LayoutGrid,
-  TerminalSquare,
   Rocket,
   History,
   Radio,
   Sparkles,
+  MessagesSquare,
+  GitPullRequest,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutGrid, label: 'Bridge', end: true },
   { to: '/violet', icon: Sparkles, label: 'Violet' },
-  { to: '/terminals', icon: TerminalSquare, label: 'Terminals' },
+  { to: '/chats', icon: MessagesSquare, label: 'Chats' },
   { to: '/launch', icon: Rocket, label: 'Mission' },
+  { to: '/pull-requests', icon: GitPullRequest, label: 'Pull Requests' },
   { to: '/history', icon: History, label: 'History' },
 ];
 
@@ -43,7 +46,11 @@ export default function Sidebar() {
               }`
             }
           >
-            <Icon className="w-5 h-5 flex-shrink-0" />
+            {to === '/violet' ? (
+              <VioletAvatar className="w-5 h-5" />
+            ) : (
+              <Icon className="w-5 h-5 flex-shrink-0" />
+            )}
             <span className="hidden lg:inline ml-3 text-sm font-medium">
               {label}
             </span>

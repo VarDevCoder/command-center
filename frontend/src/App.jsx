@@ -5,8 +5,10 @@ import BridgePage from './pages/BridgePage.jsx';
 import AgentDetailPage from './pages/AgentDetailPage.jsx';
 import MissionPage from './pages/MissionPage.jsx';
 import HistoryPage from './pages/HistoryPage.jsx';
-import TerminalPage from './pages/TerminalPage.jsx';
 import VioletPage from './pages/VioletPage.jsx';
+import VioletProfilePage from './pages/VioletProfilePage.jsx';
+import ChatsPage from './pages/ChatsPage.jsx';
+import PullRequestsPage from './pages/PullRequestsPage.jsx';
 
 export default function App() {
   return (
@@ -14,11 +16,13 @@ export default function App() {
       <Route path="/" element={<BridgeLayout />}>
         <Route index element={<BridgePage />} />
         <Route path="agent/:agentId" element={<AgentDetailPage />} />
-        <Route path="terminals" element={<TerminalPage />} />
         <Route path="launch" element={<MissionPage />} />
         <Route path="history" element={<HistoryPage />} />
         <Route path="history/:sessionId" element={<AgentDetailPage />} />
         <Route path="violet" element={<VioletPage />} />
+        <Route path="violet/profile" element={<VioletProfilePage />} />
+        <Route path="chats" element={<ChatsPage />} />
+        <Route path="pull-requests" element={<PullRequestsPage />} />
       </Route>
     </Routes>
   );

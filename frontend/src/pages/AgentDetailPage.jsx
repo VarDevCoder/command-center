@@ -5,6 +5,8 @@ import { ArrowLeft, StopCircle, Terminal, Cpu, Clock } from 'lucide-react';
 import LogViewer from '../components/logs/LogViewer.jsx';
 import CommandInput from '../components/common/CommandInput.jsx';
 import StatusBadge from '../components/agents/StatusBadge.jsx';
+import OllamaTaskView from '../components/agents/OllamaTaskView.jsx';
+import SupervisedTaskView from '../components/agents/SupervisedTaskView.jsx';
 import { agentApi, sessionApi } from '../services/api.js';
 import { useAgents } from '../hooks/useAgents.js';
 import { projectName, formatTokens, formatDateTime } from '../utils/formatters.js';
@@ -21,6 +23,8 @@ export default function AgentDetailPage() {
 
   const isHistorical = location.pathname.startsWith('/history/');
   const agent = agents.find((a) => a.id === agentId);
+  const isOllama = agent?.provider === 'ollama';
+  const isSupervised = Boolean(agent?.supervised) || isOllama;
 
   // Cargar datos de sesión histórica
   useEffect(() => {
@@ -46,6 +50,8 @@ export default function AgentDetailPage() {
         tokensOut: sessionData?.totalTokens?.output || 0,
       }
     : agent || { status: 'idle', logs: [] };
+
+  const headerStatus = displayData.status;
 
   const handleSend = async (prompt) => {
     try {
@@ -86,7 +92,7 @@ export default function AgentDetailPage() {
           </button>
           <div>
             <div className="flex items-center gap-3">
-              <StatusBadge status={displayData.status} size="lg" />
+              <StatusBadge status={headerStatus} size="lg" />
               <h2 className="font-mono text-sm text-bridge-200">
                 {agentId || sessionId?.slice(0, 8)}
               </h2>
@@ -108,7 +114,7 @@ export default function AgentDetailPage() {
           </div>
         </div>
 
-        {!isHistorical && agent?.status === 'active' && (
+        {!isHistorical && !isSupervised && agent?.status === 'active' && (
           <button
             onClick={handleStop}
             className="flex items-center gap-2 px-3 py-2 rounded-lg
@@ -121,11 +127,20 @@ export default function AgentDetailPage() {
         )}
       </div>
 
-      {/* Log viewer */}
-      <LogViewer entries={displayData.logs} className="flex-1 min-h-0" />
+      {/* Panel de rama/revisión/PR (todos los proveedores en modo protegido) */}
+      {!isHistorical && isSupervised && (
+        <SupervisedTaskView taskId={agentId} />
+      )}
 
-      {/* Command input (solo para agentes activos) */}
-      {!isHistorical && (
+      {/* Log viewer (Claude/Codex) o vista de turnos (Ollama) */}
+      {!isHistorical && isOllama ? (
+        <OllamaTaskView taskId={agentId} />
+      ) : (
+        <LogViewer entries={displayData.logs} className="flex-1 min-h-0" />
+      )}
+
+      {/* Command input (solo para agentes activos en modo directo) */}
+      {!isHistorical && !isSupervised && (
         <CommandInput
           onSend={handleSend}
           onStop={agent?.status === 'active' ? handleStop : null}

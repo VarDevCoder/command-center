@@ -8,14 +8,17 @@ import helmet from 'helmet';
 import sessionsRouter from './routes/sessions.js';
 import projectsRouter from './routes/projects.js';
 import agentsRouter, { setAgentManager } from './routes/agents.js';
-import terminalsRouter, { setTerminalManager } from './routes/terminals.js';
 import violetRouter from './routes/violet.js';
+import chatsRouter from './routes/chats.js';
+import supervisedTasksRouter from './routes/supervisedTasks.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { SessionWatcher } from './services/sessionWatcher.js';
 import { AgentManager } from './services/agentManager.js';
-import { TerminalManager } from './services/terminalManager.js';
 import { repoLocator } from './services/repoLocator.js';
 import { violetService } from './services/violetService.js';
+import { repoChatService } from './services/repoChatService.js';
+import { ollamaAgentService } from './services/ollamaAgentService.js';
+import { supervisedAgentService } from './services/supervisedAgentService.js';
 import { createLogger } from './utils/logger.js';
 
 const log = createLogger('Server');
@@ -41,16 +44,17 @@ const io = new Server(httpServer, {
 // Servicios
 const sessionWatcher = new SessionWatcher();
 const agentManager = new AgentManager();
-const terminalManager = new TerminalManager();
 setAgentManager(agentManager);
-setTerminalManager(terminalManager);
+violetService.setAgentManager(agentManager);
+supervisedAgentService.on('statusChange', (task) => violetService.onSupervisedStatusChange(task));
 
 // Rutas REST
 app.use('/api/v1/sessions', sessionsRouter);
 app.use('/api/v1/projects', projectsRouter);
 app.use('/api/v1/agents', agentsRouter);
-app.use('/api/v1/terminals', terminalsRouter);
 app.use('/api/v1/violet', violetRouter);
+app.use('/api/v1/chats', chatsRouter);
+app.use('/api/v1/supervised-tasks', supervisedTasksRouter);
 
 // Health check
 app.get('/api/v1/health', (req, res) => {
@@ -73,7 +77,6 @@ io.on('connection', (socket) => {
 
   // Enviar listas al conectar
   socket.emit('agent:list', agentManager.getAll());
-  socket.emit('terminal:list', terminalManager.getAll());
 
   // Suscribirse a logs de una sesión
   socket.on('subscribe:session', (sessionId) => {
@@ -83,24 +86,6 @@ io.on('connection', (socket) => {
 
   socket.on('unsubscribe:session', (sessionId) => {
     socket.leave(`session:${sessionId}`);
-  });
-
-  // --- Terminal events ---
-  socket.on('terminal:attach', (termId) => {
-    socket.join(`terminal:${termId}`);
-    log.info(`${socket.id} conectado a terminal ${termId}`);
-  });
-
-  socket.on('terminal:detach', (termId) => {
-    socket.leave(`terminal:${termId}`);
-  });
-
-  socket.on('terminal:input', ({ termId, data }) => {
-    terminalManager.write(termId, data);
-  });
-
-  socket.on('terminal:resize', ({ termId, cols, rows }) => {
-    terminalManager.resize(termId, cols, rows);
   });
 
   socket.on('disconnect', () => {
@@ -130,23 +115,31 @@ agentManager.on('log', (agentId, logEntry) => {
   io.emit('agent:log', { agentId, ...logEntry });
 });
 
-// Terminal manager -> Socket.IO
-terminalManager.on('data', (termId, data) => {
-  io.to(`terminal:${termId}`).emit('terminal:data', { termId, data });
-});
-
-terminalManager.on('exit', (termId, exitCode) => {
-  io.emit('terminal:exit', { termId, exitCode });
-});
-
-terminalManager.on('spawned', (terminal) => {
-  io.emit('terminal:spawned', terminal);
-});
-
 // Violet -> Socket.IO
 violetService.on('message', (msg) => {
   io.emit('violet:message', msg);
 });
+
+violetService.on('toolCall', (payload) => {
+  io.emit('violet:toolCall', payload);
+});
+
+// Repo chats -> Socket.IO
+repoChatService.on('message', (msg) => {
+  io.emit('chat:message', msg);
+});
+
+// Ollama agent -> Socket.IO (detalle turno-a-turno, específico de Ollama)
+ollamaAgentService.on('turn', (payload) => io.emit('ollama:turn', payload));
+ollamaAgentService.on('toolResult', (payload) => io.emit('ollama:toolResult', payload));
+
+// Pipeline supervisado -> Socket.IO (worktree + revisor + PR, todos los proveedores)
+supervisedAgentService.on('started', (payload) => io.emit('supervised:started', payload));
+supervisedAgentService.on('statusChange', (payload) => io.emit('supervised:statusChange', payload));
+supervisedAgentService.on('reviewResult', (payload) => io.emit('supervised:reviewResult', payload));
+supervisedAgentService.on('prCreated', (payload) => io.emit('supervised:prCreated', payload));
+supervisedAgentService.on('publishError', (payload) => io.emit('supervised:publishError', payload));
+supervisedAgentService.on('merged', (payload) => io.emit('supervised:merged', payload));
 
 // === Iniciar ===
 sessionWatcher.start();
@@ -160,7 +153,6 @@ httpServer.listen(PORT, () => {
 // Cleanup al cerrar
 process.on('SIGINT', async () => {
   log.info('Cerrando...');
-  terminalManager.killAll();
   await sessionWatcher.stop();
   httpServer.close();
   process.exit(0);

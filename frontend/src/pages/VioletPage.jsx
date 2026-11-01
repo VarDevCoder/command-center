@@ -1,17 +1,37 @@
 // Chat con Violet — coordinadora personal (cerebro: Codex / cuenta ChatGPT)
 import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { Send } from 'lucide-react';
 import { violetApi } from '../services/api.js';
 import { useSocket } from '../context/SocketContext.jsx';
 import Card from '../components/common/Card.jsx';
+import VioletAvatar from '../components/common/VioletAvatar.jsx';
 import toast from 'react-hot-toast';
+
+const DRAFT_KEY = 'violet-draft';
 
 export default function VioletPage() {
   const { socket } = useSocket();
   const [messages, setMessages] = useState([]);
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(() => {
+    try {
+      return localStorage.getItem(DRAFT_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
   const [sending, setSending] = useState(false);
+  const [toolCall, setToolCall] = useState(null);
   const bottomRef = useRef(null);
+
+  useEffect(() => {
+    try {
+      if (input) localStorage.setItem(DRAFT_KEY, input);
+      else localStorage.removeItem(DRAFT_KEY);
+    } catch {
+      // localStorage no disponible — el borrador simplemente no persiste
+    }
+  }, [input]);
 
   useEffect(() => {
     violetApi.history().then(setMessages).catch(() => {});
@@ -21,9 +41,16 @@ export default function VioletPage() {
     if (!socket) return;
     const onMessage = (msg) => {
       setMessages((prev) => [...prev, msg]);
+      if (msg.role === 'violet') setToolCall(null);
     };
+    const onToolCall = (payload) => setToolCall(payload);
+
     socket.on('violet:message', onMessage);
-    return () => socket.off('violet:message', onMessage);
+    socket.on('violet:toolCall', onToolCall);
+    return () => {
+      socket.off('violet:message', onMessage);
+      socket.off('violet:toolCall', onToolCall);
+    };
   }, [socket]);
 
   useEffect(() => {
@@ -37,12 +64,14 @@ export default function VioletPage() {
 
     setInput('');
     setSending(true);
+    setToolCall(null);
     try {
       await violetApi.chat(text);
     } catch (err) {
       toast.error(err.message);
     } finally {
       setSending(false);
+      setToolCall(null);
     }
   };
 
@@ -50,13 +79,14 @@ export default function VioletPage() {
     <div className="flex flex-col h-full max-w-3xl mx-auto">
       <Card className="flex-1 flex flex-col min-h-0">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-bridge-700">
-          <div className="w-8 h-8 rounded-full bg-purple-glow/20 border border-purple-glow/40 flex items-center justify-center font-mono text-sm text-purple-glow">
-            V
-          </div>
-          <div>
-            <p className="font-mono text-sm text-bridge-200">Violet</p>
-            <p className="text-[10px] text-bridge-500">Codex · cuenta ChatGPT</p>
-          </div>
+          <Link to="/violet/profile" className="flex w-full items-center gap-3 rounded-lg hover:text-purple-glow focus-visible:outline-2 focus-visible:outline-purple-glow" aria-label="Ver perfil de Violet">
+            <VioletAvatar />
+            <div>
+              <p className="font-mono text-sm text-bridge-200">Violet</p>
+              <p className="text-[10px] text-bridge-500">Codex · cuenta ChatGPT</p>
+            </div>
+            <span className="ml-auto text-xs text-purple-glow">Ver perfil</span>
+          </Link>
         </div>
 
         <div className="flex-1 overflow-auto p-4 space-y-3">
@@ -77,7 +107,14 @@ export default function VioletPage() {
               {m.text}
             </div>
           ))}
-          {sending && (
+          {sending && toolCall && (
+            <div className="bg-purple-glow/10 border border-purple-glow/30 text-purple-glow text-xs px-3 py-2 rounded-lg max-w-[80%] font-mono">
+              {toolCall.tool === 'read_repo' && `Leyendo ${toolCall.args.repo}${toolCall.args.path && toolCall.args.path !== '.' ? '/' + toolCall.args.path : ''}...`}
+              {toolCall.tool === 'launch_agent' && `Lanzando agente ${toolCall.args.provider} en ${toolCall.args.repo}...`}
+              {!['read_repo', 'launch_agent'].includes(toolCall.tool) && `Usando herramienta ${toolCall.tool}...`}
+            </div>
+          )}
+          {sending && !toolCall && (
             <div className="bg-bridge-800 border border-bridge-700 text-bridge-500 text-sm px-3 py-2 rounded-lg max-w-[80%] font-mono">
               Violet está escribiendo...
             </div>

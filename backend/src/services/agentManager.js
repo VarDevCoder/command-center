@@ -1,7 +1,10 @@
-// Gestor de agentes Claude Code en modo headless
-import { spawn } from 'node:child_process';
+// Router de agentes multi-proveedor (Claude Code, Codex, Ollama)
 import { EventEmitter } from 'node:events';
 import { createLogger } from '../utils/logger.js';
+import { spawnClaude } from './providers/claudeProvider.js';
+import * as codexProvider from './providers/codexProvider.js';
+import { looksLikeModification } from './gitSupervision.js';
+import { supervisedAgentService } from './supervisedAgentService.js';
 
 const log = createLogger('AgentMgr');
 
@@ -28,51 +31,23 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
-   * Spawna un nuevo agente Claude Code en modo headless
+   * Spawna un nuevo agente, delegando al provider correspondiente. Si la
+   * tarea va a modificar código (Ollama siempre, o Claude/Codex cuando el
+   * prompt matchea la heurística de palabras de modificación), se rutea al
+   * pipeline supervisado (worktree + revisor + PR) en vez del modo directo.
    */
-  spawn({ prompt, projectDir, model = 'sonnet', allowedTools, resumeFrom }) {
+  spawn({ prompt, projectDir, provider = 'claude', model = 'sonnet', effort, allowedTools, resumeFrom, repoFullName }) {
     const id = `agent-${++this.counter}-${Date.now()}`;
-
-    // Modo headless sin prompts de permisos
-    const args = ['--print', '--dangerously-skip-permissions'];
-
-    // Si es un resume de sesión anterior
-    if (resumeFrom) {
-      args.unshift('--resume', resumeFrom);
-    }
-
-    // Modelo
-    if (model && model !== 'sonnet') {
-      args.push('--model', model);
-    }
-
-    // Permisos de herramientas
-    if (allowedTools?.length) {
-      args.push('--allowedTools', allowedTools.join(','));
-    }
-
-    log.info(`Spawning agente ${id} en ${projectDir}`);
-    log.info(`Comando: claude ${args.join(' ')}`);
-
-    // Limpiar env vars que bloquean sesiones anidadas
-    const env = { ...process.env };
-    delete env.CLAUDE_CODE;
-    delete env.CLAUDECODE;
-
-    const child = spawn('claude', args, {
-      cwd: projectDir,
-      env,
-      shell: true,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
 
     const agentInfo = {
       id,
-      pid: child.pid,
+      pid: null,
       status: 'spawning',
       prompt: prompt.slice(0, 200),
       projectDir,
+      provider,
       model,
+      effort: effort || null,
       startedAt: new Date().toISOString(),
       logs: [],
       sessionId: null,
@@ -82,96 +57,51 @@ export class AgentManager extends EventEmitter {
 
     this.agents.set(id, agentInfo);
 
-    // Enviar prompt por stdin
-    child.stdin.write(prompt);
-    child.stdin.end();
+    const protectedMode = provider === 'ollama' || looksLikeModification(prompt);
 
-    // Procesar stdout
-    let buffer = '';
-    child.stdout.on('data', (data) => {
-      buffer += data.toString();
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+    if (protectedMode) {
+      agentInfo.status = 'active';
+      agentInfo.supervised = true;
+      this.emit('spawned', this.serialize(agentInfo));
+      supervisedAgentService.runProtected({ taskId: id, projectDir, prompt, provider, model, effort, repoFullName });
+      return this.serialize(agentInfo);
+    }
 
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        this.handleOutput(id, line);
-      }
-    });
+    if (provider === 'codex') {
+      agentInfo.status = 'active';
+      this.emit('spawned', this.serialize(agentInfo));
 
-    // Procesar stderr (errores y warnings)
-    child.stderr.on('data', (data) => {
-      const text = data.toString().trim();
-      if (!text) return;
-      this.addLog(id, {
-        type: 'error',
-        content: text,
-        timestamp: new Date().toISOString(),
-      });
-    });
+      codexProvider.run({ prompt, projectDir, model, effort, resumeFrom })
+        .then(({ replyText, threadId }) => {
+          const a = this.agents.get(id);
+          if (!a) return;
+          a.sessionId = threadId;
+          this.addLog(id, {
+            type: 'assistant',
+            content: replyText,
+            timestamp: new Date().toISOString(),
+          });
+          a.status = 'completed';
+          a.endedAt = new Date().toISOString();
+          this.emit('statusChange', this.serialize(a));
+        })
+        .catch((err) => {
+          const a = this.agents.get(id);
+          if (!a) return;
+          this.addLog(id, { type: 'error', content: err.message, timestamp: new Date().toISOString() });
+          a.status = 'error';
+          a.endedAt = new Date().toISOString();
+          this.emit('statusChange', this.serialize(a));
+        });
 
-    // Proceso terminado
-    child.on('close', (code) => {
-      const agent = this.agents.get(id);
-      if (agent) {
-        agent.status = code === 0 ? 'completed' : 'error';
-        agent.exitCode = code;
-        agent.endedAt = new Date().toISOString();
-        this.emit('statusChange', this.serialize(agent));
-        log.info(`Agente ${id} terminó con código ${code}`);
-      }
-    });
+      return this.serialize(agentInfo);
+    }
 
-    child.on('error', (err) => {
-      log.error(`Error en agente ${id}: ${err.message}`);
-      const agent = this.agents.get(id);
-      if (agent) {
-        agent.status = 'error';
-        agent.endedAt = new Date().toISOString();
-        this.emit('statusChange', this.serialize(agent));
-      }
-    });
-
-    // Guardar referencia al proceso
-    agentInfo._process = child;
+    // provider === 'claude' (default)
     agentInfo.status = 'active';
     this.emit('spawned', this.serialize(agentInfo));
-
+    spawnClaude(this, { id, prompt, projectDir, model, effort, allowedTools, resumeFrom });
     return this.serialize(agentInfo);
-  }
-
-  /**
-   * Procesa una línea de output del agente
-   */
-  handleOutput(agentId, line) {
-    const agent = this.agents.get(agentId);
-    if (!agent) return;
-
-    // Intentar parsear como JSON (stream-json format)
-    try {
-      const data = JSON.parse(line);
-
-      // Extraer sessionId si está disponible
-      if (data.session_id && !agent.sessionId) {
-        agent.sessionId = data.session_id;
-      }
-
-      this.addLog(agentId, {
-        type: data.type || 'output',
-        content: data.content || data.text || line,
-        timestamp: new Date().toISOString(),
-        raw: data,
-      });
-    } catch {
-      // Output de texto plano
-      if (line.trim()) {
-        this.addLog(agentId, {
-          type: 'output',
-          content: line,
-          timestamp: new Date().toISOString(),
-        });
-      }
-    }
   }
 
   /**
@@ -190,7 +120,7 @@ export class AgentManager extends EventEmitter {
   }
 
   /**
-   * Detiene un agente
+   * Detiene un agente (solo soportado para providers con proceso propio)
    */
   async stop(agentId) {
     const agent = this.agents.get(agentId);

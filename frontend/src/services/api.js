@@ -34,13 +34,6 @@ export const projectApi = {
   rescan: () => request('/projects/rescan', { method: 'POST' }),
 };
 
-export const terminalApi = {
-  list: () => request('/terminals'),
-  get: (id) => request(`/terminals/${id}`),
-  create: (body = {}) => request('/terminals', { method: 'POST', body: JSON.stringify(body) }),
-  kill: (id) => request(`/terminals/${id}`, { method: 'DELETE' }),
-};
-
 export const healthApi = {
   check: () => request('/health'),
 };
@@ -48,4 +41,30 @@ export const healthApi = {
 export const violetApi = {
   history: () => request('/violet/history'),
   chat: (text) => request('/violet/chat', { method: 'POST', body: JSON.stringify({ text }) }),
+};
+
+export const chatsApi = {
+  list: () => request('/chats'),
+  history: (repoDir, provider = 'claude') =>
+    request(`/chats/history?repoDir=${encodeURIComponent(repoDir)}&provider=${provider}`),
+  send: (repoDir, repoName, text, provider = 'claude') => request('/chats/send', {
+    method: 'POST',
+    body: JSON.stringify({ repoDir, repoName, text, provider }),
+  }),
+};
+
+export const ollamaApi = {
+  list: () => request('/agents/ollama-tasks'),
+  get: (taskId) => request(`/agents/ollama-tasks/${taskId}`),
+};
+
+export const supervisedApi = {
+  list: (filters = {}) => {
+    const params = new URLSearchParams(Object.entries(filters).filter(([, v]) => v));
+    const qs = params.toString();
+    return request(`/supervised-tasks${qs ? `?${qs}` : ''}`);
+  },
+  get: (taskId) => request(`/supervised-tasks/${taskId}`),
+  publish: (taskId) => request(`/supervised-tasks/${taskId}/publish`, { method: 'POST' }),
+  merge: (taskId) => request(`/supervised-tasks/${taskId}/merge`, { method: 'POST' }),
 };

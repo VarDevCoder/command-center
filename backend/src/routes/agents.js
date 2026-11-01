@@ -1,6 +1,7 @@
 // Rutas de gestión de agentes
 import { Router } from 'express';
 import { z } from 'zod';
+import { ollamaAgentService } from '../services/ollamaAgentService.js';
 
 const router = Router();
 
@@ -8,8 +9,11 @@ const router = Router();
 const spawnSchema = z.object({
   prompt: z.string().min(1).max(10000),
   projectDir: z.string().min(1),
-  model: z.enum(['sonnet', 'opus', 'haiku']).default('sonnet'),
+  provider: z.enum(['claude', 'codex', 'ollama']).default('claude'),
+  model: z.string().min(1).default('sonnet'),
+  effort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   allowedTools: z.array(z.string()).optional(),
+  repoFullName: z.string().optional(),
 });
 
 // Referencia al agentManager (se inyecta desde index.js)
@@ -25,6 +29,33 @@ export function setAgentManager(manager) {
 router.get('/', (req, res) => {
   const agents = agentManager ? agentManager.getAll() : [];
   res.json({ success: true, data: agents });
+});
+
+/**
+ * GET /api/v1/agents/ollama-tasks — lista de tareas Ollama (persistidas en disco)
+ */
+router.get('/ollama-tasks', async (req, res, next) => {
+  try {
+    const tasks = await ollamaAgentService.listTasks();
+    res.json({ success: true, data: tasks });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/agents/ollama-tasks/:id — detalle de una tarea Ollama
+ */
+router.get('/ollama-tasks/:id', async (req, res, next) => {
+  try {
+    const task = await ollamaAgentService.getTask(req.params.id);
+    if (!task) {
+      return res.status(404).json({ success: false, error: { message: 'Tarea no encontrada' } });
+    }
+    res.json({ success: true, data: task });
+  } catch (err) {
+    next(err);
+  }
 });
 
 /**
@@ -123,7 +154,9 @@ router.post('/:id/send', (req, res, next) => {
     const newAgent = agentManager.spawn({
       prompt,
       projectDir: agent.projectDir,
+      provider: agent.provider || 'claude',
       model: agent.model || 'sonnet',
+      effort: agent.effort || undefined,
       resumeFrom: agent.sessionId,
     });
 
