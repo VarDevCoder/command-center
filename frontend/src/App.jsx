@@ -9,6 +9,7 @@ import VioletPage from './pages/VioletPage.jsx';
 import VioletProfilePage from './pages/VioletProfilePage.jsx';
 import ChatsPage from './pages/ChatsPage.jsx';
 import PullRequestsPage from './pages/PullRequestsPage.jsx';
+import OperationsPage from './pages/OperationsPage.jsx';
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="violet/profile" element={<VioletProfilePage />} />
         <Route path="chats" element={<ChatsPage />} />
         <Route path="pull-requests" element={<PullRequestsPage />} />
+        <Route path="operations" element={<OperationsPage />} />
       </Route>
     </Routes>
   );

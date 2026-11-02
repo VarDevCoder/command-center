@@ -1,5 +1,5 @@
 // Orquestador del pipeline supervisado: worktree aislado -> agente trabaja
-// -> revisor Claude Code evalúa -> hasta 2 reintentos automáticos de
+// -> Codex con razonamiento máximo evalúa -> hasta 2 reintentos automáticos de
 // corrección -> si aprueba, se publica un PR real en GitHub. El merge a la
 // rama base NUNCA es automático — es siempre una acción explícita del
 // usuario desde la UI (ver mergePR, el único punto de entrada a un merge).
@@ -126,12 +126,12 @@ class SupervisedAgentService extends EventEmitter {
 
     while (true) {
       await this._emitStatus(task, 'reviewing');
-      const { verdict, notes } = await reviewWorktree(task.worktreePath);
+      const { verdict, notes, reviewer } = await reviewWorktree(task.worktreePath);
       const reviewedSha = await getHeadSha(task.worktreePath);
 
-      task.reviewCycles.push({ attempt, verdict, notes, reviewedSha, timestamp: new Date().toISOString() });
+      task.reviewCycles.push({ attempt, verdict, notes, reviewer, reviewedSha, timestamp: new Date().toISOString() });
       await this._saveTask(task);
-      this.emit('reviewResult', { taskId: task.taskId, attempt, verdict, notes, reviewedSha, timestamp: new Date().toISOString() });
+      this.emit('reviewResult', { taskId: task.taskId, attempt, verdict, notes, reviewer, reviewedSha, timestamp: new Date().toISOString() });
 
       if (verdict === 'APPROVE') {
         task.approvedSha = reviewedSha;
@@ -199,7 +199,11 @@ class SupervisedAgentService extends EventEmitter {
         await pushBranch(task.worktreePath, task.branch);
         const commits = await getCommits(task.worktreePath, task.baseBranch);
         const title = task.prompt.slice(0, 72);
-        const body = `Agente: ${task.provider} (${task.model})\n\nTarea:\n${task.prompt}\n\nCommits:\n${commits.map((c) => `- ${c.subject}`).join('\n')}\n\n---\nCreado automáticamente por Command Center. Revisado por un agente Claude Code de solo lectura antes de publicarse. El merge queda pendiente de aprobación manual.`;
+        const lastReview = task.reviewCycles?.[task.reviewCycles.length - 1];
+        const reviewerLabel = lastReview?.reviewer
+          ? `${lastReview.reviewer.provider} ${lastReview.reviewer.model} (${lastReview.reviewer.effort})`
+          : 'revisor automático';
+        const body = `Agente: ${task.provider} (${task.model})\n\nTarea:\n${task.prompt}\n\nCommits:\n${commits.map((c) => `- ${c.subject}`).join('\n')}\n\n---\nCreado automáticamente por Command Center. Revisado en modo de solo lectura por ${reviewerLabel} antes de publicarse. El merge queda pendiente de aprobación manual.`;
         pr = await createPr({ worktreePath: task.worktreePath, branch: task.branch, baseBranch: task.baseBranch, title, body });
       }
 

@@ -68,3 +68,13 @@ export const supervisedApi = {
   publish: (taskId) => request(`/supervised-tasks/${taskId}/publish`, { method: 'POST' }),
   merge: (taskId) => request(`/supervised-tasks/${taskId}/merge`, { method: 'POST' }),
 };
+
+export const vscodeAgentApi = {
+  list: () => request('/vscode-agents'),
+  open: (projectDir) => request('/vscode-agents/open', { method: 'POST', body: JSON.stringify({ projectDir }) }),
+  stop: (uri) => request('/vscode-agents/stop', { method: 'POST', body: JSON.stringify({ uri }) }),
+};
+
+export const usageApi = {
+  summary: (days = 30) => request(`/usage?days=${days}`),
+};

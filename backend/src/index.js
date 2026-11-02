@@ -11,6 +11,8 @@ import agentsRouter, { setAgentManager } from './routes/agents.js';
 import violetRouter from './routes/violet.js';
 import chatsRouter from './routes/chats.js';
 import supervisedTasksRouter from './routes/supervisedTasks.js';
+import vscodeAgentsRouter from './routes/vscodeAgents.js';
+import usageRouter from './routes/usage.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 import { SessionWatcher } from './services/sessionWatcher.js';
 import { AgentManager } from './services/agentManager.js';
@@ -55,6 +57,8 @@ app.use('/api/v1/agents', agentsRouter);
 app.use('/api/v1/violet', violetRouter);
 app.use('/api/v1/chats', chatsRouter);
 app.use('/api/v1/supervised-tasks', supervisedTasksRouter);
+app.use('/api/v1/vscode-agents', vscodeAgentsRouter);
+app.use('/api/v1/usage', usageRouter);
 
 // Health check
 app.get('/api/v1/health', (req, res) => {

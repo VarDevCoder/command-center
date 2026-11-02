@@ -95,6 +95,11 @@ export default function SupervisedTaskView({ taskId }) {
                   <Icon className="w-3.5 h-3.5" />
                   intento {c.attempt} · {c.verdict}
                 </div>
+                {c.reviewer && (
+                  <p className="mt-1 text-[10px] font-mono text-bridge-500">
+                    revisor: {c.reviewer.provider} · {c.reviewer.model} · razonamiento {c.reviewer.effort}
+                  </p>
+                )}
                 <p className="text-xs text-bridge-300 mt-1.5 whitespace-pre-wrap">{c.notes}</p>
               </div>
             );

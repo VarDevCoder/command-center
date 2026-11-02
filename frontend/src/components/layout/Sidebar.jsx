@@ -9,6 +9,7 @@ import {
   Sparkles,
   MessagesSquare,
   GitPullRequest,
+  Gauge,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { to: '/chats', icon: MessagesSquare, label: 'Chats' },
   { to: '/launch', icon: Rocket, label: 'Mission' },
   { to: '/pull-requests', icon: GitPullRequest, label: 'Pull Requests' },
+  { to: '/operations', icon: Gauge, label: 'Agents & Costos' },
   { to: '/history', icon: History, label: 'History' },
 ];
 

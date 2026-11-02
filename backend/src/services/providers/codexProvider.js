@@ -1,15 +1,21 @@
 // Provider Codex/GPT — invocación no interactiva vía Codex CLI (cuenta ChatGPT)
 import { spawn } from 'node:child_process';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { createLogger } from '../../utils/logger.js';
 import { PATHS } from '../../utils/paths.js';
 
 const log = createLogger('CodexProvider');
+const CODEX_JS = process.env.CODEX_CLI_JS || join(
+  process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'),
+  'npm', 'node_modules', '@openai', 'codex', 'bin', 'codex.js'
+);
 
 /**
  * Corre un prompt no interactivo con Codex CLI. No hace streaming (Codex solo
  * entrega el resultado al final del turno) — devuelve { replyText, threadId }.
  */
-export function run({ prompt, projectDir, model, effort, resumeFrom }) {
+export function run({ prompt, projectDir, model, effort, resumeFrom, sandbox }) {
   return new Promise((resolve, reject) => {
     const baseArgs = ['exec', '--json', '--skip-git-repo-check', '--ignore-user-config'];
     const args = resumeFrom
@@ -19,16 +25,14 @@ export function run({ prompt, projectDir, model, effort, resumeFrom }) {
     if (model) args.push('-m', model);
     // Codex CLI no tiene --effort; el nivel de razonamiento se setea vía override de config.
     if (effort) args.push('-c', `model_reasoning_effort=${effort}`);
+    if (sandbox) args.push('--sandbox', sandbox);
 
     log.info(`codex ${args.join(' ')}`.slice(0, 150));
 
-    // shell:true en Windows no cita args con espacios automáticamente —
-    // hay que citarlos a mano antes de pasarlos al shell.
-    const quotedArgs = args.map((a) => (/\s/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a));
-
-    const child = spawn('codex', quotedArgs, {
+    // Invocar el JS de la CLI mediante Node evita cmd.exe/shell:true y conserva
+    // cada argumento exactamente, incluso prompts largos o multilínea.
+    const child = spawn(process.execPath, [CODEX_JS, ...args], {
       cwd: projectDir || PATHS.workspace,
-      shell: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 

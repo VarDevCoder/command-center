@@ -8,6 +8,8 @@ import { EventEmitter } from 'node:events';
 import { createLogger } from '../utils/logger.js';
 import { PATHS } from '../utils/paths.js';
 import { listRepos } from './githubService.js';
+import { vscodeAgentService } from './vscodeAgentService.js';
+import { usageMetricsService } from './usageMetricsService.js';
 
 const log = createLogger('Violet');
 
@@ -18,11 +20,15 @@ const MAX_TOOL_TURNS = 5;
 // pasa por repoLocator/githubService como los demás repos.
 const OBSIDIAN_VAULT = 'C:\\Dev\\MemoriasMias\\Desarrollo';
 
-const SYSTEM_PROMPT = `Sos Violet, la coordinadora personal del Jefe dentro de Command Center. Tenés acceso a tres herramientas reales:
+const SYSTEM_PROMPT = `Sos Violet, la coordinadora personal del Jefe dentro de Command Center. Tenés acceso a herramientas reales:
 
 1. read_repo: leé un archivo o listá un directorio de cualquier repo que el Jefe ya tenga clonado localmente. Uso: {"tool": "read_repo", "repo": "nombre o parte del nombre del repo", "path": "ruta relativa dentro del repo, o '.' para listar la raíz"}
 2. read_vault: leé un archivo o listá una carpeta del vault de Obsidian del Jefe (sus notas personales). Uso: {"tool": "read_vault", "path": "ruta relativa dentro del vault, o '.' para listar la raíz"}
 3. launch_agent: lanzá un agente real de Claude Code o Codex para que trabaje en un repo o directamente en el vault de Obsidian. Uso: {"tool": "launch_agent", "repo": "nombre del repo, o la palabra 'obsidian' para trabajar en el vault", "provider": "claude" o "codex", "model": "ej. sonnet", "prompt": "instrucciones claras y completas para el agente"}
+4. list_vscode_sessions: listá las sesiones reales de la ventana Agents de VS Code. Uso: {"tool":"list_vscode_sessions"}
+5. open_vscode_project: abrí un proyecto en la ventana Agents de VS Code. Uso: {"tool":"open_vscode_project","repo":"nombre del repo"}
+6. stop_vscode_turn: cancelá el turno activo de una sesión de VS Code. Uso: {"tool":"stop_vscode_turn","uri":"codex:/id-de-sesion"}
+7. usage_metrics: consultá tokens y costo API equivalente estimado de Claude Code y ChatGPT/Codex. Uso: {"tool":"usage_metrics","days":30}
 
 Cuando necesites usar una herramienta, respondé con ÚNICAMENTE un bloque \`\`\`json con una sola de esas llamadas, nada más de texto. El sistema te va a devolver el resultado y vos seguís la conversación.
 Cuando ya tengas lo que necesitás (o no haga falta ninguna herramienta), respondé normalmente en texto, como siempre lo hacés, con tu personalidad.
@@ -195,6 +201,10 @@ class VioletService extends EventEmitter {
       if (toolCall.tool === 'read_repo') return await this._readRepo(toolCall.repo, toolCall.path || '.');
       if (toolCall.tool === 'read_vault') return await this._readVault(toolCall.path || '.');
       if (toolCall.tool === 'launch_agent') return await this._launchAgent(toolCall);
+      if (toolCall.tool === 'list_vscode_sessions') return JSON.stringify(await vscodeAgentService.listSessions(), null, 2).slice(0, 12000);
+      if (toolCall.tool === 'open_vscode_project') return await this._openVsCodeProject(toolCall.repo);
+      if (toolCall.tool === 'stop_vscode_turn') return JSON.stringify(await vscodeAgentService.stop(toolCall.uri));
+      if (toolCall.tool === 'usage_metrics') return JSON.stringify(await usageMetricsService.getSummary(toolCall.days), null, 2).slice(0, 12000);
       return `Error: herramienta desconocida "${toolCall.tool}"`;
     } catch (err) {
       return `Error: ${err.message}`;
@@ -266,6 +276,12 @@ class VioletService extends EventEmitter {
     const agent = this.agentManager.spawn({ prompt, projectDir, provider, model });
     this.watchedAgents.set(agent.id, { label, provider });
     return `Agente lanzado: id ${agent.id}, proveedor ${provider}, destino ${label}. El Jefe puede seguirlo en Mission Control. Te voy a avisar cuando termine.`;
+  }
+
+  async _openVsCodeProject(repoQuery) {
+    const repo = await this._resolveRepo(repoQuery);
+    await vscodeAgentService.openProject(repo.dir);
+    return `Abrí ${repo.name} en la ventana Agents de VS Code.`;
   }
 
   _runCodex(prompt) {

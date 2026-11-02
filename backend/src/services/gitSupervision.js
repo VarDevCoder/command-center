@@ -5,13 +5,19 @@ import { promisify } from 'node:util';
 import { join, dirname } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { createLogger } from '../utils/logger.js';
-import { runClaudeOnce } from './providers/claudeProvider.js';
+import * as codexProvider from './providers/codexProvider.js';
 
 const log = createLogger('GitSupervision');
 const execFileAsync = promisify(execFile);
 
-const REVIEW_PROMPT = 'Review the changes in this git worktree. Run git diff against the base branch, read changed files as needed, and report one of APPROVE / REJECT / FIX-NEEDED with notes explaining why.';
-const REVIEW_ALLOWED_TOOLS = ['Read', 'Grep', 'Glob', 'Bash(git diff)', 'Bash(git log)', 'Bash(git status)'];
+const REVIEW_MODEL = process.env.CODEX_REVIEW_MODEL || 'gpt-6.1-sol';
+const REVIEW_EFFORT = process.env.CODEX_REVIEW_EFFORT || 'max';
+const REVIEW_PROMPT = `Actuá como revisor técnico de solo lectura. Revisá todos los cambios de este git worktree contra la rama base usando git diff, git log y los archivos modificados. No edites archivos, no hagas commits y no cambies el repositorio.
+
+Emití exactamente uno de estos veredictos y explicá los hallazgos con archivo y línea cuando corresponda:
+- APPROVE: el cambio es correcto, seguro y verificable.
+- FIX-NEEDED: hay problemas corregibles antes de aprobar.
+- REJECT: existe un riesgo grave o el enfoque no debe publicarse.`;
 
 // Heurística de detección de "esta tarea va a modificar archivos" —
 // deliberadamente inclusiva: prefiere falsos positivos. Una tarea de solo
@@ -53,26 +59,32 @@ export async function removeWorktree(worktreePath, projectDir) {
 }
 
 /**
- * Revisor de solo lectura: corre un Claude Code restringido a herramientas
- * de lectura + git diff/log/status, y devuelve un veredicto parseado.
+ * Revisor de solo lectura: usa Codex con razonamiento máximo dentro del
+ * sandbox read-only y devuelve un veredicto parseado.
  */
 export async function reviewWorktree(worktreePath, { extraContext } = {}) {
   try {
     const prompt = extraContext ? `${REVIEW_PROMPT}\n\n${extraContext}` : REVIEW_PROMPT;
-    const replyText = await runClaudeOnce({
+    const { replyText } = await codexProvider.run({
       prompt,
       projectDir: worktreePath,
-      model: 'sonnet',
-      allowedTools: REVIEW_ALLOWED_TOOLS,
+      model: REVIEW_MODEL,
+      effort: REVIEW_EFFORT,
+      sandbox: 'read-only',
     });
 
     const verdictMatch = replyText.match(/\b(APPROVE|REJECT|FIX-NEEDED)\b/i);
     return {
       verdict: verdictMatch ? verdictMatch[1].toUpperCase() : 'FIX-NEEDED',
       notes: replyText,
+      reviewer: { provider: 'codex', model: REVIEW_MODEL, effort: REVIEW_EFFORT },
     };
   } catch (err) {
-    return { verdict: 'ERROR', notes: `No se pudo revisar: ${err.message}` };
+    return {
+      verdict: 'ERROR',
+      notes: `No se pudo revisar con Codex: ${err.message}`,
+      reviewer: { provider: 'codex', model: REVIEW_MODEL, effort: REVIEW_EFFORT },
+    };
   }
 }
 
