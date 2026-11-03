@@ -2,6 +2,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { ollamaAgentService } from '../services/ollamaAgentService.js';
+import { providerAccountService } from '../services/providerAccountService.js';
 
 const router = Router();
 
@@ -29,6 +30,28 @@ export function setAgentManager(manager) {
 router.get('/', (req, res) => {
   const agents = agentManager ? agentManager.getAll() : [];
   res.json({ success: true, data: agents });
+});
+
+/** GET /api/v1/agents/providers — cuentas de proveedores disponibles */
+router.get('/providers', async (req, res, next) => {
+  try {
+    res.json({ success: true, data: await providerAccountService.list() });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/** POST /api/v1/agents/providers/claude/login — inicia el login oficial */
+router.post('/providers/claude/login', async (req, res, next) => {
+  try {
+    const { email } = z.object({ email: z.string().email().optional() }).parse(req.body || {});
+    res.json({ success: true, data: await providerAccountService.loginClaude(email) });
+  } catch (err) {
+    if (err.name === 'ZodError') {
+      return res.status(400).json({ success: false, error: { message: 'Correo inválido', details: err.issues } });
+    }
+    next(err);
+  }
 });
 
 /**

@@ -30,7 +30,9 @@ const PORT = process.env.PORT || 3066;
 const app = express();
 app.use(cors({ origin: ['http://localhost:5166', 'http://localhost:5173'] }));
 app.use(helmet({ contentSecurityPolicy: false }));
-app.use(express.json());
+// Las imágenes de Violet viajan como base64. El límite sigue siendo acotado
+// y cada archivo se vuelve a validar antes de guardarse.
+app.use(express.json({ limit: '36mb' }));
 
 // HTTP Server compartido
 const httpServer = createServer(app);

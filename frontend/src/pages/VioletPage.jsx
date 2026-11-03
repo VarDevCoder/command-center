@@ -1,7 +1,7 @@
 // Chat con Violet — coordinadora personal (cerebro: Codex / cuenta ChatGPT)
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Send } from 'lucide-react';
+import { ImagePlus, Send, X } from 'lucide-react';
 import { violetApi } from '../services/api.js';
 import { useSocket } from '../context/SocketContext.jsx';
 import Card from '../components/common/Card.jsx';
@@ -9,6 +9,26 @@ import VioletAvatar from '../components/common/VioletAvatar.jsx';
 import toast from 'react-hot-toast';
 
 const DRAFT_KEY = 'violet-draft';
+const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+
+function readImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const preview = String(reader.result);
+      resolve({
+        id: `${file.name}-${file.lastModified}-${file.size}-${Math.random()}`,
+        name: file.name,
+        mimeType: file.type,
+        data: preview.split(',')[1],
+        preview,
+      });
+    };
+    reader.onerror = () => reject(new Error(`No pude leer ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function VioletPage() {
   const { socket } = useSocket();
@@ -21,8 +41,10 @@ export default function VioletPage() {
     }
   });
   const [sending, setSending] = useState(false);
+  const [images, setImages] = useState([]);
   const [toolCall, setToolCall] = useState(null);
   const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     try {
@@ -60,19 +82,56 @@ export default function VioletPage() {
   const handleSend = async (e) => {
     e.preventDefault();
     const text = input.trim();
-    if (!text || sending) return;
+    if ((!text && images.length === 0) || sending) return;
 
+    const pendingImages = images;
     setInput('');
+    setImages([]);
     setSending(true);
     setToolCall(null);
     try {
-      await violetApi.chat(text);
+      await violetApi.chat(text, pendingImages.map(({ name, mimeType, data }) => ({ name, mimeType, data })));
     } catch (err) {
+      setInput(text);
+      setImages(pendingImages);
       toast.error(err.message);
     } finally {
       setSending(false);
       setToolCall(null);
     }
+  };
+
+  const addImages = async (files) => {
+    const available = 4 - images.length;
+    if (available <= 0) return toast.error('Podés adjuntar hasta 4 imágenes');
+
+    const selected = files.slice(0, available);
+    const invalid = selected.find((file) => !ALLOWED_IMAGE_TYPES.includes(file.type) || file.size > MAX_IMAGE_BYTES);
+    if (invalid) return toast.error(`${invalid.name}: usá PNG, JPG, WebP o GIF de hasta 8 MB`);
+
+    try {
+      const loadedImages = await Promise.all(selected.map(readImage));
+      setImages((current) => [...current, ...loadedImages]);
+      if (files.length > available) toast.error('Podés adjuntar hasta 4 imágenes');
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
+
+  const handleImages = async (event) => {
+    const files = [...event.target.files];
+    event.target.value = '';
+    await addImages(files);
+  };
+
+  const handlePaste = async (event) => {
+    const pastedImages = [...event.clipboardData.items]
+      .filter((item) => item.kind === 'file' && item.type.startsWith('image/'))
+      .map((item) => item.getAsFile())
+      .filter(Boolean);
+    if (pastedImages.length === 0) return;
+    event.preventDefault();
+    await addImages(pastedImages);
   };
 
   return (
@@ -104,6 +163,15 @@ export default function VioletPage() {
                   : 'bg-bridge-800 border border-bridge-700 text-bridge-200'
               }`}
             >
+              {m.attachments?.length > 0 && (
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {m.attachments.map((attachment) => (
+                    <a key={attachment.id} href={attachment.url} target="_blank" rel="noreferrer">
+                      <img src={attachment.url} alt={attachment.name} className="max-h-56 w-full rounded-md object-cover" />
+                    </a>
+                  ))}
+                </div>
+              )}
               {m.text}
             </div>
           ))}
@@ -122,23 +190,61 @@ export default function VioletPage() {
           <div ref={bottomRef} />
         </div>
 
-        <form onSubmit={handleSend} className="flex gap-2 p-3 border-t border-bridge-700">
+        <form onSubmit={handleSend} className="p-3 border-t border-bridge-700">
+          {images.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto pb-3">
+              {images.map((image) => (
+                <div key={image.id} className="relative shrink-0">
+                  <img src={image.preview} alt={image.name} className="h-20 w-20 rounded-lg border border-bridge-700 object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))}
+                    className="absolute -right-1 -top-1 rounded-full bg-bridge-950 p-1 text-bridge-300 hover:text-white"
+                    aria-label={`Quitar ${image.name}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp,image/gif"
+            multiple
+            onChange={handleImages}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={sending || images.length >= 4}
+            className="px-3 py-2 rounded-lg border border-bridge-700 text-bridge-300 hover:border-purple-glow/50 hover:text-purple-glow disabled:opacity-30 transition-colors"
+            aria-label="Adjuntar imágenes"
+            title="Adjuntar imágenes"
+          >
+            <ImagePlus className="w-4 h-4" />
+          </button>
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Escribile a Violet..."
+            onPaste={handlePaste}
+            placeholder="Escribile o pegá una imagen con Ctrl+V..."
             disabled={sending}
             className="flex-1 bg-bridge-950 border border-bridge-700 rounded-lg px-3 py-2
               text-sm text-bridge-200 focus:outline-none focus:border-cyan-glow/50 disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={sending || !input.trim()}
+            disabled={sending || (!input.trim() && images.length === 0)}
             className="px-4 py-2 rounded-lg bg-cyan-glow/10 text-cyan-glow border border-cyan-glow/30
               hover:bg-cyan-glow/20 disabled:opacity-30 transition-colors"
           >
             <Send className="w-4 h-4" />
           </button>
+          </div>
         </form>
       </Card>
     </div>

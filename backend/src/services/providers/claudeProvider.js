@@ -1,8 +1,13 @@
 // Provider Claude Code — spawn headless, streaming de logs vía stdout JSON
 import { spawn } from 'node:child_process';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('ClaudeProvider');
+const CLAUDE_EXE = process.env.CLAUDE_CLI_PATH || (process.platform === 'win32'
+  ? join(process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'), 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'bin', 'claude.exe')
+  : 'claude');
 
 /**
  * Spawna un agente Claude Code en modo headless. Escribe directamente en el
@@ -32,10 +37,9 @@ export function spawnClaude(manager, { id, prompt, projectDir, model = 'sonnet',
   delete env.CLAUDE_CODE;
   delete env.CLAUDECODE;
 
-  const child = spawn('claude', args, {
+  const child = spawn(CLAUDE_EXE, args, {
     cwd: projectDir,
     env,
-    shell: true,
     stdio: ['pipe', 'pipe', 'pipe'],
   });
 
@@ -82,7 +86,9 @@ export function spawnClaude(manager, { id, prompt, projectDir, model = 'sonnet',
     log.error(`Error en agente ${id}: ${err.message}`);
     const a = manager.agents.get(id);
     if (a) {
+      manager.addLog(id, { type: 'error', content: err.message, timestamp: new Date().toISOString() });
       a.status = 'error';
+      a.exitCode = err.code || null;
       a.endedAt = new Date().toISOString();
       manager.emit('statusChange', manager.serialize(a));
     }
@@ -147,10 +153,9 @@ export function runClaudeOnceDetailed({ prompt, projectDir, model = 'sonnet', ef
     delete env.CLAUDE_CODE;
     delete env.CLAUDECODE;
 
-    const child = spawn('claude', args, {
+    const child = spawn(CLAUDE_EXE, args, {
       cwd: projectDir,
       env,
-      shell: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
 

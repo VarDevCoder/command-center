@@ -1,6 +1,6 @@
 // Mission Control — Lanzar nuevos agentes
 import { useState, useEffect, useRef } from 'react';
-import { Rocket, Lock, Globe, Download, HardDrive, RefreshCw } from 'lucide-react';
+import { Rocket, Lock, Globe, Download, HardDrive, RefreshCw, CircleCheck, CircleX, LogIn } from 'lucide-react';
 import { agentApi, projectApi } from '../services/api.js';
 import Card from '../components/common/Card.jsx';
 import toast from 'react-hot-toast';
@@ -44,7 +44,17 @@ export default function MissionPage() {
   });
   const [submitting, setSubmitting] = useState(false);
   const [scan, setScan] = useState({ status: 'idle', reposFound: 0 });
+  const [providerAccounts, setProviderAccounts] = useState([]);
+  const [loadingAccount, setLoadingAccount] = useState(true);
   const pollRef = useRef(null);
+
+  const loadProviderAccounts = () => {
+    setLoadingAccount(true);
+    agentApi.providers()
+      .then(setProviderAccounts)
+      .catch(() => setProviderAccounts([]))
+      .finally(() => setLoadingAccount(false));
+  };
 
   const loadProjects = () => {
     projectApi.list()
@@ -71,9 +81,24 @@ export default function MissionPage() {
   // Cargar lista de repos desde GitHub + seguir el escaneo de disco en background
   useEffect(() => {
     loadProjects();
+    loadProviderAccounts();
     pollScan();
     return () => clearTimeout(pollRef.current);
   }, []);
+
+  const handleClaudeLogin = async () => {
+    try {
+      const result = await agentApi.loginClaude();
+      if (result.connected) {
+        toast.success(`Claude Code ya está conectado como ${result.email}`);
+      } else {
+        toast.success('Se abrió el inicio de sesión de Claude Code');
+        setTimeout(loadProviderAccounts, 5000);
+      }
+    } catch (err) {
+      toast.error(err.message);
+    }
+  };
 
   const handleRescan = () => {
     setScan((prev) => ({ ...prev, status: 'scanning' }));
@@ -323,6 +348,44 @@ export default function MissionPage() {
 
       {/* Columna lateral: proyecto seleccionado + misiones rápidas */}
       <div className="space-y-6">
+        <Card title="Provider Accounts" action={
+          <button type="button" onClick={loadProviderAccounts} className="text-bridge-500 hover:text-cyan-glow" title="Actualizar cuentas">
+            <RefreshCw className={`w-3.5 h-3.5 ${loadingAccount ? 'animate-spin' : ''}`} />
+          </button>
+        }>
+          <div className="p-4 space-y-3">
+            {providerAccounts.map((account) => (
+              <div key={account.id} className="rounded-lg border border-bridge-700 bg-bridge-950/60 p-3">
+                <div className="flex items-center gap-2">
+                  {account.connected
+                    ? <CircleCheck className="w-4 h-4 text-green-glow" />
+                    : <CircleX className="w-4 h-4 text-red-glow" />}
+                  <p className="font-mono text-sm text-bridge-200">{account.name}</p>
+                  <span className={`ml-auto text-[10px] font-mono uppercase ${account.connected ? 'text-green-glow' : 'text-red-glow'}`}>
+                    {account.connected ? 'Conectado' : 'Desconectado'}
+                  </span>
+                </div>
+                {account.connected ? (
+                  <div className="mt-2 space-y-1 text-[10px] font-mono text-bridge-500">
+                    <p className="text-bridge-300 truncate">{account.email}</p>
+                    <p>{account.subscription ? `Plan ${account.subscription}` : 'Cuenta Claude'} · v{account.version}</p>
+                  </div>
+                ) : (
+                  <div className="mt-3">
+                    <p className="text-[10px] text-bridge-500 mb-2">{account.error || 'Iniciá sesión con tu cuenta de Claude.'}</p>
+                    {account.available !== false && (
+                      <button type="button" onClick={handleClaudeLogin} className="flex items-center gap-1.5 px-3 py-1.5 rounded border border-purple-glow/30 bg-purple-glow/10 text-purple-glow text-xs font-mono hover:bg-purple-glow/20">
+                        <LogIn className="w-3.5 h-3.5" /> Conectar Claude
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ))}
+            {!loadingAccount && providerAccounts.length === 0 && <p className="text-xs text-bridge-500">No se pudieron consultar proveedores.</p>}
+          </div>
+        </Card>
+
         <Card title="Project Info">
           <div className="p-4 space-y-2">
             {selectedProject ? (

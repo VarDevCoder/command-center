@@ -13,6 +13,11 @@ async function request(url, options = {}) {
 
 export const agentApi = {
   list: () => request('/agents'),
+  providers: () => request('/agents/providers'),
+  loginClaude: (email) => request('/agents/providers/claude/login', {
+    method: 'POST',
+    body: JSON.stringify(email ? { email } : {}),
+  }),
   get: (id) => request(`/agents/${id}`),
   spawn: (body) => request('/agents', { method: 'POST', body: JSON.stringify(body) }),
   stop: (id) => request(`/agents/${id}/stop`, { method: 'POST' }),
@@ -40,7 +45,10 @@ export const healthApi = {
 
 export const violetApi = {
   history: () => request('/violet/history'),
-  chat: (text) => request('/violet/chat', { method: 'POST', body: JSON.stringify({ text }) }),
+  chat: (text, images = []) => request('/violet/chat', {
+    method: 'POST',
+    body: JSON.stringify({ text, images }),
+  }),
 };
 
 export const chatsApi = {

@@ -4,6 +4,8 @@
 import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
+import { homedir } from 'node:os';
+import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { createLogger } from '../utils/logger.js';
 import { PATHS } from '../utils/paths.js';
@@ -14,7 +16,21 @@ import { usageMetricsService } from './usageMetricsService.js';
 const log = createLogger('Violet');
 
 const HISTORY_FILE = join(PATHS.claudeDir, '..', 'command-center-data', 'violet-history.json');
+const ATTACHMENTS_DIR = process.env.COMMAND_CENTER_DATA_DIR
+  ? join(process.env.COMMAND_CENTER_DATA_DIR, 'violet-attachments')
+  : join(process.cwd(), 'data', 'violet-attachments');
 const MAX_TOOL_TURNS = 5;
+const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
+const IMAGE_TYPES = {
+  'image/png': { extension: 'png', signature: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) },
+  'image/jpeg': { extension: 'jpg', signature: (b) => b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff },
+  'image/webp': { extension: 'webp', signature: (b) => b.subarray(0, 4).toString() === 'RIFF' && b.subarray(8, 12).toString() === 'WEBP' },
+  'image/gif': { extension: 'gif', signature: (b) => ['GIF87a', 'GIF89a'].includes(b.subarray(0, 6).toString()) },
+};
+const CODEX_JS = process.env.CODEX_CLI_JS || join(
+  process.env.APPDATA || join(homedir(), 'AppData', 'Roaming'),
+  'npm', 'node_modules', '@openai', 'codex', 'bin', 'codex.js',
+);
 
 // Vault de Obsidian del Jefe — ruta fija, no es un repo de GitHub así que no
 // pasa por repoLocator/githubService como los demás repos.
@@ -127,32 +143,86 @@ class VioletService extends EventEmitter {
     return this.messages;
   }
 
+  getAttachment(fileName) {
+    if (!/^[0-9a-f-]{36}\.(png|jpg|webp|gif)$/.test(fileName)) {
+      const error = new Error('Adjunto inválido');
+      error.code = 'INVALID_ATTACHMENT';
+      throw error;
+    }
+    const extension = fileName.split('.').pop();
+    const mimeType = { png: 'image/png', jpg: 'image/jpeg', webp: 'image/webp', gif: 'image/gif' }[extension];
+    return { path: join(ATTACHMENTS_DIR, fileName), mimeType };
+  }
+
+  async _storeImages(images) {
+    if (!images.length) return [];
+    await mkdir(ATTACHMENTS_DIR, { recursive: true });
+
+    return Promise.all(images.map(async ({ name, mimeType, data }) => {
+      const type = IMAGE_TYPES[mimeType];
+      const bytes = Buffer.from(data, 'base64');
+      if (!type || bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES || !type.signature(bytes)) {
+        throw new Error(`La imagen "${name}" no es válida o supera 8 MB`);
+      }
+      const fileName = `${randomUUID()}.${type.extension}`;
+      const path = join(ATTACHMENTS_DIR, fileName);
+      await writeFile(path, bytes);
+      return {
+        path,
+        public: {
+          id: fileName,
+          name,
+          mimeType,
+          url: `/api/v1/violet/attachments/${fileName}`,
+        },
+      };
+    }));
+  }
+
   /**
    * Envía un mensaje a Violet (Codex). Si Violet pide usar una herramienta,
    * el backend la ejecuta y le devuelve el resultado, iterando hasta que
    * responda en texto normal o se alcance el límite de turnos.
    */
-  async send(text) {
+  async send(text, images = []) {
     await this._loaded;
     if (this.busy) {
       throw new Error('Violet ya está respondiendo, esperá un momento');
     }
     this.busy = true;
 
-    const userMsg = { role: 'user', text, timestamp: new Date().toISOString() };
-    this.messages.push(userMsg);
-    this.emit('message', userMsg);
-
     try {
+      const storedImages = await this._storeImages(images);
+      const userText = text || 'Analizá estas imágenes.';
+      const userMsg = {
+        role: 'user',
+        text,
+        attachments: storedImages.map((image) => image.public),
+        timestamp: new Date().toISOString(),
+      };
+      this.messages.push(userMsg);
+      this.emit('message', userMsg);
+
       // Reinyectamos el system prompt en cada mensaje de usuario (no solo el
       // primero del thread): Codex no garantiza recordar instrucciones de
       // herramientas entre turnos resumidos de la misma forma que un modelo
       // con ventana de contexto completa.
-      let prompt = `${SYSTEM_PROMPT}\n\n${text}`;
+      let prompt = `${SYSTEM_PROMPT}\n\n${userText}`;
       let finalReply = '';
 
       for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
-        const reply = await this._runCodex(prompt);
+        const turnImages = turn === 0 ? storedImages.map((image) => image.path) : [];
+        let reply;
+        try {
+          reply = await this._runCodex(prompt, turnImages);
+        } catch (err) {
+          // Un historial viejo puede apuntar a un thread que Codex ya purgó.
+          // Abrimos uno nuevo conservando el mensaje y los adjuntos actuales.
+          if (!this.threadId || !err.message.includes('no rollout found')) throw err;
+          log.warn(`Thread ${this.threadId} ya no existe; iniciando uno nuevo`);
+          this.threadId = null;
+          reply = await this._runCodex(prompt, turnImages);
+        }
         const toolCall = this._parseToolCall(reply);
 
         if (!toolCall) {
@@ -284,21 +354,21 @@ class VioletService extends EventEmitter {
     return `Abrí ${repo.name} en la ventana Agents de VS Code.`;
   }
 
-  _runCodex(prompt) {
+  _runCodex(prompt, imagePaths = []) {
     return new Promise((resolve, reject) => {
       // El prompt va por stdin (con '-' como marcador), no como argumento:
       // evita por completo el problema de citar/escapar saltos de línea o
       // comillas en cmd.exe cuando el prompt es largo o multilínea.
-      const baseArgs = ['exec', '-', '--json', '--skip-git-repo-check', '--ignore-user-config'];
+      const imageArgs = imagePaths.flatMap((path) => ['-i', path]);
+      const baseArgs = ['exec', ...imageArgs, '-', '--json', '--skip-git-repo-check', '--ignore-user-config'];
       const args = this.threadId
-        ? ['exec', 'resume', this.threadId, '-', '--json', '--skip-git-repo-check', '--ignore-user-config']
+        ? ['exec', 'resume', this.threadId, ...imageArgs, '-', '--json', '--skip-git-repo-check', '--ignore-user-config']
         : baseArgs;
 
       log.info(`codex ${args.join(' ')}`.slice(0, 150));
 
-      const child = spawn('codex', args, {
+      const child = spawn(process.execPath, [CODEX_JS, ...args], {
         cwd: PATHS.workspace,
-        shell: true,
         stdio: ['pipe', 'pipe', 'pipe'],
       });
 
