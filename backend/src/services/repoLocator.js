@@ -109,7 +109,7 @@ class RepoLocator {
 /**
  * Extrae "owner/repo" de una URL remota de git (https o ssh)
  */
-function parseGitHubFullName(url) {
+export function parseGitHubFullName(url) {
   const httpsMatch = url.match(/github\.com[/:]([^/]+)\/(.+?)(\.git)?$/i);
   if (!httpsMatch) return null;
   return `${httpsMatch[1]}/${httpsMatch[2].replace(/\.git$/, '')}`;

@@ -2,10 +2,11 @@
 // supervisado de todos los proveedores (Claude/Codex/Ollama).
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { join, dirname } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { createLogger } from '../utils/logger.js';
 import * as codexProvider from './providers/codexProvider.js';
+import { parseGitHubFullName } from './repoLocator.js';
 
 const log = createLogger('GitSupervision');
 const execFileAsync = promisify(execFile);
@@ -138,15 +139,32 @@ export async function pushBranch(worktreePath, branch) {
 }
 
 /**
- * Resuelve la rama base real directamente del propio repo local (no de
- * `gh repo list`, que depende de que el repo pertenezca a la cuenta de
- * GitHub autenticada y de que repoFullName llegue bien armado desde el
- * frontend). Usa el checkout original (projectDir), no el worktree, porque
- * el worktree nace con HEAD detached en la rama nueva recién creada.
- *
- * Orden de resolución:
- * 1. HEAD simbólico del remoto `origin` (lo que GitHub marca como rama por defecto).
- * 2. Rama actualmente checkeada en projectDir (fallback si no hay remoto accesible).
+ * "owner/repo" según el remote origin del checkout, o null si no es de GitHub.
+ */
+export async function resolveRepoFullNameFromLocalRepo(projectDir) {
+  try {
+    const { stdout } = await execFileAsync('git', ['config', '--get', 'remote.origin.url'], { cwd: projectDir });
+    return parseGitHubFullName(stdout.trim());
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Raíz del repo git que contiene `dir`. Falla si la ruta no existe o no es un repo.
+ */
+export async function resolveLocalRepoDir(dir) {
+  try {
+    const { stdout } = await execFileAsync('git', ['rev-parse', '--show-toplevel'], { cwd: dir });
+    return resolve(stdout.trim());
+  } catch {
+    throw new Error(`"${dir}" no es un repositorio git local`);
+  }
+}
+
+/**
+ * Rama base según el propio checkout: la rama por defecto de `origin` o, si el
+ * remoto no responde, la rama actual. Null si ninguna es válida.
  */
 export async function resolveBaseBranchFromLocalRepo(projectDir) {
   try {

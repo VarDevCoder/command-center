@@ -178,7 +178,7 @@ export default function VioletPage() {
           {sending && toolCall && (
             <div className="bg-purple-glow/10 border border-purple-glow/30 text-purple-glow text-xs px-3 py-2 rounded-lg max-w-[80%] font-mono">
               {toolCall.tool === 'read_repo' && `Leyendo ${toolCall.args.repo}${toolCall.args.path && toolCall.args.path !== '.' ? '/' + toolCall.args.path : ''}...`}
-              {toolCall.tool === 'launch_agent' && `Lanzando agente ${toolCall.args.provider} en ${toolCall.args.repo}...`}
+              {toolCall.tool === 'launch_agent' && `Lanzando agente ${toolCall.args.provider} en ${toolCall.args.dir || toolCall.args.repo}...`}
               {!['read_repo', 'launch_agent'].includes(toolCall.tool) && `Usando herramienta ${toolCall.tool}...`}
             </div>
           )}

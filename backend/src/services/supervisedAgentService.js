@@ -8,7 +8,7 @@ import { join, dirname } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { createLogger } from '../utils/logger.js';
 import { PATHS } from '../utils/paths.js';
-import { createWorktree, removeWorktree, reviewWorktree, getDiffStat, getCommits, getHeadSha, pushBranch, resolveBaseBranchFromLocalRepo } from './gitSupervision.js';
+import { createWorktree, removeWorktree, reviewWorktree, getDiffStat, getCommits, getHeadSha, pushBranch, resolveBaseBranchFromLocalRepo, resolveRepoFullNameFromLocalRepo } from './gitSupervision.js';
 import { findExistingPr, createPr, mergePr } from './prService.js';
 import * as claudeDriver from './providers/supervisionDrivers/claudeDriver.js';
 import * as codexDriver from './providers/supervisionDrivers/codexDriver.js';
@@ -86,20 +86,18 @@ class SupervisedAgentService extends EventEmitter {
     await this._saveTask(task);
 
     try {
+      const baseBranch = await resolveBaseBranchFromLocalRepo(projectDir);
+      if (!baseBranch) {
+        throw new Error(`No se pudo determinar la rama base del repo en "${projectDir}"`);
+      }
+      task.baseBranch = baseBranch;
+      task.repoFullName = repoFullName || await resolveRepoFullNameFromLocalRepo(projectDir);
+
       const { worktreePath, branch } = await createWorktree(projectDir, taskId, provider);
       task.worktreePath = worktreePath;
       task.branch = branch;
       await this._saveTask(task);
       this.emit('started', { taskId, projectDir, worktreePath, branch, prompt, provider, model, startedAt: task.startedAt });
-
-      const baseBranch = await resolveBaseBranchFromLocalRepo(projectDir);
-      if (!baseBranch) {
-        task.lastError = `No se pudo determinar la rama base del repo en "${projectDir}" con confianza`;
-        await this._emitStatus(task, 'publish-error');
-        return;
-      }
-      task.baseBranch = baseBranch;
-      await this._saveTask(task);
 
       const initial = await driver.runInitial({ taskId, worktreePath, prompt, model, effort });
       task.driverState.sessionId = initial.sessionId;
@@ -135,7 +133,8 @@ class SupervisedAgentService extends EventEmitter {
       if (verdict === 'APPROVE') {
         task.approvedSha = reviewedSha;
         await this._saveTask(task);
-        await this.publishPR(task.taskId);
+        // Se pasa en memoria: tareas concurrentes pueden pisar la aprobación recién guardada en disco.
+        await this.publishPR(task.taskId, task);
         return;
       }
 
@@ -171,9 +170,15 @@ class SupervisedAgentService extends EventEmitter {
    * Publica la rama (push) y abre un PR real. Idempotente: si ya existe un
    * PR para esta rama, solo lo registra en vez de crear uno nuevo.
    */
-  async publishPR(taskId) {
-    const task = await this.getTask(taskId);
+  async publishPR(taskId, loadedTask) {
+    const task = loadedTask || await this.getTask(taskId);
     if (!task) return;
+
+    if (!task.approvedSha) {
+      task.lastError = 'Esta tarea no tiene cambios aprobados por el revisor, así que no se publicó nada. Si el agente no llegó a ejecutarse, lanzala de nuevo.';
+      await this._emitStatus(task, 'error');
+      return;
+    }
 
     try {
       const existing = await findExistingPr(task.worktreePath, task.branch);

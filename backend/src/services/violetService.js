@@ -10,6 +10,7 @@ import { EventEmitter } from 'node:events';
 import { createLogger } from '../utils/logger.js';
 import { PATHS } from '../utils/paths.js';
 import { listRepos } from './githubService.js';
+import { resolveLocalRepoDir } from './gitSupervision.js';
 import { vscodeAgentService } from './vscodeAgentService.js';
 import { usageMetricsService } from './usageMetricsService.js';
 
@@ -40,7 +41,7 @@ const SYSTEM_PROMPT = `Sos Violet, la coordinadora personal del Jefe dentro de C
 
 1. read_repo: leé un archivo o listá un directorio de cualquier repo que el Jefe ya tenga clonado localmente. Uso: {"tool": "read_repo", "repo": "nombre o parte del nombre del repo", "path": "ruta relativa dentro del repo, o '.' para listar la raíz"}
 2. read_vault: leé un archivo o listá una carpeta del vault de Obsidian del Jefe (sus notas personales). Uso: {"tool": "read_vault", "path": "ruta relativa dentro del vault, o '.' para listar la raíz"}
-3. launch_agent: lanzá un agente real de Claude Code o Codex para que trabaje en un repo o directamente en el vault de Obsidian. Uso: {"tool": "launch_agent", "repo": "nombre del repo, o la palabra 'obsidian' para trabajar en el vault", "provider": "claude" o "codex", "model": "ej. sonnet", "prompt": "instrucciones claras y completas para el agente"}
+3. launch_agent: lanzá un agente real de Claude Code o Codex para que trabaje en un repo o directamente en el vault de Obsidian. Uso: {"tool": "launch_agent", "repo": "nombre del repo, o la palabra 'obsidian' para trabajar en el vault", "dir": "opcional: ruta absoluta del checkout. Pasala siempre que el Jefe indique una ruta concreta: un mismo repo puede estar clonado en varias carpetas y sin ella se usa la primera que se encontró", "provider": "claude" o "codex", "model": "ej. sonnet", "prompt": "instrucciones claras y completas para el agente"}
 4. list_vscode_sessions: listá las sesiones reales de la ventana Agents de VS Code. Uso: {"tool":"list_vscode_sessions"}
 5. open_vscode_project: abrí un proyecto en la ventana Agents de VS Code. Uso: {"tool":"open_vscode_project","repo":"nombre del repo"}
 6. stop_vscode_turn: cancelá el turno activo de una sesión de VS Code. Uso: {"tool":"stop_vscode_turn","uri":"codex:/id-de-sesion"}
@@ -96,7 +97,7 @@ class VioletService extends EventEmitter {
    * reintentos agotados, PR listo para aprobar, o error publicando).
    */
   async onSupervisedStatusChange(task) {
-    const REPORTABLE = ['escalated-rejected', 'escalated-unresolved', 'pr-open', 'publish-error'];
+    const REPORTABLE = ['escalated-rejected', 'escalated-unresolved', 'pr-open', 'publish-error', 'error'];
     if (!REPORTABLE.includes(task.status)) return;
 
     await this._loaded;
@@ -106,6 +107,7 @@ class VioletService extends EventEmitter {
       'escalated-unresolved': `Jefe, el agente ${task.provider} en ${task.repoFullName || task.projectDir} no logró resolver las observaciones del revisor tras los reintentos automáticos. La rama "${task.branch}" quedó intacta para que la retomes.\n\n${task.reviewCycles?.[task.reviewCycles.length - 1]?.notes || ''}`,
       'pr-open': `Jefe, hay un PR listo para tu aprobación: ${task.pr?.url || '(sin link)'}\n\nLo armó el agente ${task.provider} en ${task.repoFullName || task.projectDir}. Lo revisás y lo mergeás vos cuando quieras.`,
       'publish-error': `Jefe, no pude publicar el PR del agente ${task.provider} en ${task.repoFullName || task.projectDir}. El trabajo está a salvo en la rama "${task.branch}" — podés reintentar la publicación desde la UI.\n\n${task.lastError || ''}`,
+      error: `Jefe, la tarea del agente ${task.provider} en ${task.repoFullName || task.projectDir} no se pudo completar.\n\n${task.lastError || ''}`,
     };
 
     const violetMsg = { role: 'violet', text: messages[task.status], timestamp: new Date().toISOString() };
@@ -335,13 +337,16 @@ class VioletService extends EventEmitter {
     }
   }
 
-  async _launchAgent({ repo: repoQuery, provider = 'claude', model = 'sonnet', prompt }) {
+  async _launchAgent({ repo: repoQuery, dir, provider = 'claude', model = 'sonnet', prompt }) {
     if (!this.agentManager) return 'Error: el gestor de agentes no está disponible todavía';
     if (!prompt) return 'Error: falta el prompt para el agente';
 
     const isObsidian = (repoQuery || '').toLowerCase().trim() === 'obsidian';
-    const projectDir = isObsidian ? OBSIDIAN_VAULT : (await this._resolveRepo(repoQuery)).dir;
-    const label = isObsidian ? 'vault de Obsidian' : repoQuery;
+    let projectDir;
+    if (isObsidian) projectDir = OBSIDIAN_VAULT;
+    else if (dir) projectDir = await resolveLocalRepoDir(dir);
+    else projectDir = (await this._resolveRepo(repoQuery)).dir;
+    const label = isObsidian ? 'vault de Obsidian' : (dir ? projectDir : repoQuery);
 
     const agent = this.agentManager.spawn({ prompt, projectDir, provider, model });
     this.watchedAgents.set(agent.id, { label, provider });

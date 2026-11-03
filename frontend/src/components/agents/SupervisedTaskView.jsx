@@ -50,8 +50,9 @@ export default function SupervisedTaskView({ taskId }) {
   const handlePublish = async () => {
     setPublishing(true);
     try {
-      await supervisedApi.publish(taskId);
-      toast.success('Publicación reintentada');
+      const updated = await supervisedApi.publish(taskId);
+      if (updated?.status === 'pr-open') toast.success('PR publicado');
+      else toast.error('No se publicó el PR');
       load();
     } catch (err) {
       toast.error(err.message);
@@ -113,6 +114,13 @@ export default function SupervisedTaskView({ taskId }) {
           {task.status === 'escalated-rejected'
             ? 'Rechazado por un problema grave — no se reintentó automáticamente.'
             : 'No se resolvió tras los reintentos automáticos.'} La rama quedó intacta.
+        </div>
+      )}
+
+      {task.status === 'error' && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-glow/10 border border-red-glow/40 text-red-glow text-xs">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          {task.lastError}
         </div>
       )}
 
