@@ -8,9 +8,8 @@ import { join, dirname } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { createLogger } from '../utils/logger.js';
 import { PATHS } from '../utils/paths.js';
-import { createWorktree, removeWorktree, reviewWorktree, getDiffStat, getCommits, getHeadSha, pushBranch } from './gitSupervision.js';
+import { createWorktree, removeWorktree, reviewWorktree, getDiffStat, getCommits, getHeadSha, pushBranch, resolveBaseBranchFromLocalRepo } from './gitSupervision.js';
 import { findExistingPr, createPr, mergePr } from './prService.js';
-import { listRepos } from './githubService.js';
 import * as claudeDriver from './providers/supervisionDrivers/claudeDriver.js';
 import * as codexDriver from './providers/supervisionDrivers/codexDriver.js';
 import * as ollamaDriver from './providers/supervisionDrivers/ollamaDriver.js';
@@ -93,9 +92,9 @@ class SupervisedAgentService extends EventEmitter {
       await this._saveTask(task);
       this.emit('started', { taskId, projectDir, worktreePath, branch, prompt, provider, model, startedAt: task.startedAt });
 
-      const baseBranch = await this._resolveBaseBranch(repoFullName);
+      const baseBranch = await resolveBaseBranchFromLocalRepo(projectDir);
       if (!baseBranch) {
-        task.lastError = `No se pudo determinar la rama base de "${repoFullName}" con confianza`;
+        task.lastError = `No se pudo determinar la rama base del repo en "${projectDir}" con confianza`;
         await this._emitStatus(task, 'publish-error');
         return;
       }
@@ -165,18 +164,6 @@ class SupervisedAgentService extends EventEmitter {
       });
       task.driverState.sessionId = retry.sessionId || task.driverState.sessionId;
       await this._saveTask(task);
-    }
-  }
-
-  async _resolveBaseBranch(repoFullName) {
-    if (!repoFullName) return null;
-    try {
-      const repos = await listRepos();
-      const repo = repos.find((r) => r.fullName === repoFullName);
-      return repo?.defaultBranch || null;
-    } catch (err) {
-      log.error(`Error resolviendo rama base: ${err.message}`);
-      return null;
     }
   }
 

@@ -136,3 +136,40 @@ export async function pushBranch(worktreePath, branch) {
   await execFileAsync('git', ['push', '-u', 'origin', branch], { cwd: worktreePath });
   log.info(`Rama publicada: ${branch}`);
 }
+
+/**
+ * Resuelve la rama base real directamente del propio repo local (no de
+ * `gh repo list`, que depende de que el repo pertenezca a la cuenta de
+ * GitHub autenticada y de que repoFullName llegue bien armado desde el
+ * frontend). Usa el checkout original (projectDir), no el worktree, porque
+ * el worktree nace con HEAD detached en la rama nueva recién creada.
+ *
+ * Orden de resolución:
+ * 1. HEAD simbólico del remoto `origin` (lo que GitHub marca como rama por defecto).
+ * 2. Rama actualmente checkeada en projectDir (fallback si no hay remoto accesible).
+ */
+export async function resolveBaseBranchFromLocalRepo(projectDir) {
+  try {
+    const { stdout } = await execFileAsync(
+      'git', ['remote', 'show', 'origin'],
+      { cwd: projectDir }
+    );
+    const match = stdout.match(/HEAD branch:\s*(\S+)/);
+    if (match && match[1] && match[1] !== '(unknown)') return match[1];
+  } catch (err) {
+    log.error(`No se pudo leer HEAD branch de origin en ${projectDir}: ${err.message}`);
+  }
+
+  try {
+    const { stdout } = await execFileAsync(
+      'git', ['rev-parse', '--abbrev-ref', 'HEAD'],
+      { cwd: projectDir }
+    );
+    const branch = stdout.trim();
+    if (branch && branch !== 'HEAD') return branch;
+  } catch (err) {
+    log.error(`No se pudo determinar la rama actual en ${projectDir}: ${err.message}`);
+  }
+
+  return null;
+}
