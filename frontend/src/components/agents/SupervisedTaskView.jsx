@@ -111,9 +111,8 @@ export default function SupervisedTaskView({ taskId }) {
       {(task.status === 'escalated-rejected' || task.status === 'escalated-unresolved') && (
         <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-glow/10 border border-amber-glow/40 text-amber-glow text-xs">
           <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-          {task.status === 'escalated-rejected'
-            ? 'Rechazado por un problema grave — no se reintentó automáticamente.'
-            : 'No se resolvió tras los reintentos automáticos.'} La rama quedó intacta.
+          {task.status === 'escalated-rejected' ? 'Rechazado por el revisor.' : 'Observaciones sin resolver.'}
+          {' '}Intentos de corrección: {Math.max((task.reviewCycles?.length || 0) - 1, 0)}. No se publicó nada y la rama quedó intacta. El motivo está en el último ciclo de revisión.
         </div>
       )}
 
@@ -124,19 +123,28 @@ export default function SupervisedTaskView({ taskId }) {
         </div>
       )}
 
-      {task.status === 'publish-error' && (
+      {(task.status === 'publish-error' || task.status === 'approved-unpublished') && (
         <div className="space-y-2">
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-glow/10 border border-red-glow/40 text-red-glow text-xs">
-            <AlertTriangle className="w-4 h-4 flex-shrink-0" />
-            No se pudo publicar el PR: {task.lastError}
-          </div>
+          {task.status === 'publish-error' ? (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-red-glow/10 border border-red-glow/40 text-red-glow text-xs">
+              <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+              No se pudo publicar el PR: {task.lastError}
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-glow/10 border border-green-glow/40 text-green-glow text-xs">
+              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
+              Aprobado por el revisor. La tarea pide no hacer push, así que los cambios quedaron en la rama, sin publicar.
+            </div>
+          )}
           <button
             onClick={handlePublish}
             disabled={publishing}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-glow/10 text-cyan-glow border border-cyan-glow/30 hover:bg-cyan-glow/20 disabled:opacity-30 text-xs font-mono transition-colors"
           >
             <RefreshCw className="w-3.5 h-3.5" />
-            {publishing ? 'Reintentando...' : 'Reintentar publicación'}
+            {publishing
+              ? 'Publicando...'
+              : task.status === 'publish-error' ? 'Reintentar publicación' : 'Publicar de todos modos'}
           </button>
         </div>
       )}

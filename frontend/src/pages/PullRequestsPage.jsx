@@ -16,6 +16,7 @@ const STATUS_LABEL = {
   'no-changes': 'Sin cambios',
   'escalated-rejected': 'Rechazado',
   'escalated-unresolved': 'Sin resolver',
+  'approved-unpublished': 'Finalizado sin publicar',
   'pr-open': 'PR listo',
   'publish-error': 'Error al publicar',
   merged: 'Mergeado',

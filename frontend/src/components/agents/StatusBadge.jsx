@@ -1,11 +1,11 @@
 // Badge de estado con dot animado
 const STATUS_CONFIG = {
-  active: { color: 'bg-green-glow', text: 'text-green-glow', label: 'ACTIVE', pulse: true },
+  active: { color: 'bg-green-glow', text: 'text-green-glow', label: 'ACTIVO', pulse: true },
   spawning: { color: 'bg-cyan-glow', text: 'text-cyan-glow', label: 'SPAWNING', pulse: true },
   thinking: { color: 'bg-amber-glow', text: 'text-amber-glow', label: 'THINKING', pulse: true },
-  completed: { color: 'bg-bridge-400', text: 'text-bridge-400', label: 'DONE', pulse: false },
+  completed: { color: 'bg-bridge-400', text: 'text-bridge-400', label: 'FINALIZADO', pulse: false },
   error: { color: 'bg-red-glow', text: 'text-red-glow', label: 'ERROR', pulse: false },
-  stopped: { color: 'bg-red-glow', text: 'text-red-glow', label: 'STOPPED', pulse: false },
+  stopped: { color: 'bg-red-glow', text: 'text-red-glow', label: 'DETENIDO', pulse: false },
   stopping: { color: 'bg-amber-glow', text: 'text-amber-glow', label: 'STOPPING', pulse: true },
   idle: { color: 'bg-bridge-500', text: 'text-bridge-500', label: 'IDLE', pulse: false },
   running: { color: 'bg-green-glow', text: 'text-green-glow', label: 'RUNNING', pulse: true },

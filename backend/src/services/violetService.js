@@ -97,14 +97,18 @@ class VioletService extends EventEmitter {
    * reintentos agotados, PR listo para aprobar, o error publicando).
    */
   async onSupervisedStatusChange(task) {
-    const REPORTABLE = ['escalated-rejected', 'escalated-unresolved', 'pr-open', 'publish-error', 'error'];
+    const REPORTABLE = ['escalated-rejected', 'escalated-unresolved', 'approved-unpublished', 'pr-open', 'publish-error', 'error'];
     if (!REPORTABLE.includes(task.status)) return;
 
     await this._loaded;
 
+    const lastNotes = task.reviewCycles?.[task.reviewCycles.length - 1]?.notes || '';
+    const corrections = Math.max((task.reviewCycles?.length || 0) - 1, 0);
+
     const messages = {
-      'escalated-rejected': `Jefe, el agente ${task.provider} que trabajó en ${task.repoFullName || task.projectDir} tuvo un problema grave según el revisor y no voy a reintentar automáticamente.\n\n${task.reviewCycles?.[task.reviewCycles.length - 1]?.notes || ''}`,
-      'escalated-unresolved': `Jefe, el agente ${task.provider} en ${task.repoFullName || task.projectDir} no logró resolver las observaciones del revisor tras los reintentos automáticos. La rama "${task.branch}" quedó intacta para que la retomes.\n\n${task.reviewCycles?.[task.reviewCycles.length - 1]?.notes || ''}`,
+      'escalated-rejected': `Jefe, el revisor rechazó el trabajo del agente ${task.provider} en ${task.repoFullName || task.projectDir} y el agente no logró resolverlo. Intentos de corrección: ${corrections}. No se publicó nada y la rama "${task.branch}" quedó intacta.\n\nMotivo del último rechazo:\n${lastNotes}`,
+      'escalated-unresolved': `Jefe, el agente ${task.provider} en ${task.repoFullName || task.projectDir} no logró resolver las observaciones del revisor. Intentos de corrección: ${corrections}. No se publicó nada y la rama "${task.branch}" quedó intacta para que la retomes.\n\nÚltimas observaciones:\n${lastNotes}`,
+      'approved-unpublished': `Jefe, el revisor aprobó el trabajo del agente ${task.provider} en ${task.repoFullName || task.projectDir}. La tarea pide no hacer push, así que no publiqué nada: los cambios quedaron en la rama "${task.branch}". Si querés publicarlos, tenés el botón en el detalle del agente.`,
       'pr-open': `Jefe, hay un PR listo para tu aprobación: ${task.pr?.url || '(sin link)'}\n\nLo armó el agente ${task.provider} en ${task.repoFullName || task.projectDir}. Lo revisás y lo mergeás vos cuando quieras.`,
       'publish-error': `Jefe, no pude publicar el PR del agente ${task.provider} en ${task.repoFullName || task.projectDir}. El trabajo está a salvo en la rama "${task.branch}" — podés reintentar la publicación desde la UI.\n\n${task.lastError || ''}`,
       error: `Jefe, la tarea del agente ${task.provider} en ${task.repoFullName || task.projectDir} no se pudo completar.\n\n${task.lastError || ''}`,
@@ -349,7 +353,8 @@ class VioletService extends EventEmitter {
     const label = isObsidian ? 'vault de Obsidian' : (dir ? projectDir : repoQuery);
 
     const agent = this.agentManager.spawn({ prompt, projectDir, provider, model });
-    this.watchedAgents.set(agent.id, { label, provider });
+    // Las tareas supervisadas ya avisan por onSupervisedStatusChange.
+    if (!agent.supervised) this.watchedAgents.set(agent.id, { label, provider });
     return `Agente lanzado: id ${agent.id}, proveedor ${provider}, destino ${label}. El Jefe puede seguirlo en Mission Control. Te voy a avisar cuando termine.`;
   }
 

@@ -8,6 +8,20 @@ import { supervisedAgentService } from './supervisedAgentService.js';
 
 const log = createLogger('AgentMgr');
 
+const SUPERVISED_AGENT_STATUS = {
+  working: 'active',
+  reviewing: 'active',
+  retrying: 'active',
+  'no-changes': 'completed',
+  'approved-unpublished': 'completed',
+  'pr-open': 'completed',
+  merged: 'completed',
+  'escalated-rejected': 'stopped',
+  'escalated-unresolved': 'stopped',
+  'publish-error': 'stopped',
+  error: 'stopped',
+};
+
 // Intentar importar tree-kill, fallback a process.kill
 let treeKill;
 try {
@@ -28,6 +42,17 @@ export class AgentManager extends EventEmitter {
     // Mapa de agentes: id -> agentInfo
     this.agents = new Map();
     this.counter = 0;
+    supervisedAgentService.on('statusChange', (task) => this._syncSupervised(task));
+  }
+
+  _syncSupervised(task) {
+    const agent = this.agents.get(task.taskId);
+    const status = SUPERVISED_AGENT_STATUS[task.status];
+    if (!agent || !status || agent.status === status) return;
+
+    agent.status = status;
+    agent.endedAt = status === 'active' ? null : new Date().toISOString();
+    this.emit('statusChange', this.serialize(agent));
   }
 
   /**

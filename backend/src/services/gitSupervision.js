@@ -15,10 +15,24 @@ const REVIEW_MODEL = process.env.CODEX_REVIEW_MODEL || 'gpt-6.1-sol';
 const REVIEW_EFFORT = process.env.CODEX_REVIEW_EFFORT || 'max';
 const REVIEW_PROMPT = `Actuá como revisor técnico de solo lectura. Revisá todos los cambios de este git worktree contra la rama base usando git diff, git log y los archivos modificados. No edites archivos, no hagas commits y no cambies el repositorio.
 
-Emití exactamente uno de estos veredictos y explicá los hallazgos con archivo y línea cuando corresponda:
-- APPROVE: el cambio es correcto, seguro y verificable.
-- FIX-NEEDED: hay problemas corregibles antes de aprobar.
-- REJECT: existe un riesgo grave o el enfoque no debe publicarse.`;
+Tu respuesta tiene que incluir, en una línea propia, exactamente uno de estos veredictos:
+VEREDICTO: APPROVE — el cambio es correcto, seguro y verificable.
+VEREDICTO: FIX-NEEDED — hay problemas corregibles antes de aprobar.
+VEREDICTO: REJECT — existe un riesgo grave o el enfoque no debe publicarse.
+
+Si no aprobás, explicá con claridad cada motivo: qué está mal, en qué archivo y línea, y qué hay que corregir. El desarrollador va a recibir ese texto para intentar resolverlo.`;
+
+const NO_PUBLISH = /\b(?:no|ni|sin|nunca|not|never|without|don'?t)\b[^.\n]{0,40}?(?:\bpush\w*|\bpublic[aá]\w*|\bpubliqu\w*|\bpull requests?\b|\bprs?\b)/i;
+
+export function forbidsPublishing(prompt) {
+  return NO_PUBLISH.test(prompt || '');
+}
+
+// Sin una línea de veredicto explícita nunca se aprueba: "no puedo dar APPROVE" no es una aprobación.
+export function parseReviewVerdict(replyText) {
+  const match = (replyText || '').match(/^\W*VEREDICTO\W*(APPROVE|REJECT|FIX-NEEDED)\b/im);
+  return match ? match[1].toUpperCase() : 'FIX-NEEDED';
+}
 
 // Heurística de detección de "esta tarea va a modificar archivos" —
 // deliberadamente inclusiva: prefiere falsos positivos. Una tarea de solo
@@ -74,9 +88,8 @@ export async function reviewWorktree(worktreePath, { extraContext } = {}) {
       sandbox: 'read-only',
     });
 
-    const verdictMatch = replyText.match(/\b(APPROVE|REJECT|FIX-NEEDED)\b/i);
     return {
-      verdict: verdictMatch ? verdictMatch[1].toUpperCase() : 'FIX-NEEDED',
+      verdict: parseReviewVerdict(replyText),
       notes: replyText,
       reviewer: { provider: 'codex', model: REVIEW_MODEL, effort: REVIEW_EFFORT },
     };
@@ -126,6 +139,18 @@ export async function getCommits(worktreePath, baseBranch) {
 export async function getHeadSha(worktreePath) {
   const { stdout } = await execFileAsync('git', ['rev-parse', 'HEAD'], { cwd: worktreePath });
   return stdout.trim();
+}
+
+/**
+ * Commitea lo que el agente dejó pendiente. El revisor lee el working tree y el
+ * push solo sube commits: sin esto se aprobaría una corrección y se publicaría
+ * el commit rechazado.
+ */
+export async function commitPendingChanges(worktreePath) {
+  const { stdout } = await execFileAsync('git', ['status', '--porcelain'], { cwd: worktreePath });
+  if (!stdout.trim()) return;
+  await execFileAsync('git', ['add', '-A'], { cwd: worktreePath });
+  await execFileAsync('git', ['commit', '-m', 'Cambios del agente sin commitear'], { cwd: worktreePath });
 }
 
 /**

@@ -1,14 +1,15 @@
 // Orquestador del pipeline supervisado: worktree aislado -> agente trabaja
 // -> Codex con razonamiento máximo evalúa -> hasta 2 reintentos automáticos de
-// corrección -> si aprueba, se publica un PR real en GitHub. El merge a la
-// rama base NUNCA es automático — es siempre una acción explícita del
-// usuario desde la UI (ver mergePR, el único punto de entrada a un merge).
+// corrección -> si aprueba, se publica un PR real en GitHub, salvo que la
+// tarea prohíba el push. El merge a la rama base NUNCA es automático — es
+// siempre una acción explícita del usuario desde la UI (ver mergePR, el único
+// punto de entrada a un merge).
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { EventEmitter } from 'node:events';
 import { createLogger } from '../utils/logger.js';
 import { PATHS } from '../utils/paths.js';
-import { createWorktree, removeWorktree, reviewWorktree, getDiffStat, getCommits, getHeadSha, pushBranch, resolveBaseBranchFromLocalRepo, resolveRepoFullNameFromLocalRepo } from './gitSupervision.js';
+import { createWorktree, removeWorktree, reviewWorktree, getDiffStat, getCommits, getHeadSha, pushBranch, resolveBaseBranchFromLocalRepo, resolveRepoFullNameFromLocalRepo, forbidsPublishing, commitPendingChanges } from './gitSupervision.js';
 import { findExistingPr, createPr, mergePr } from './prService.js';
 import * as claudeDriver from './providers/supervisionDrivers/claudeDriver.js';
 import * as codexDriver from './providers/supervisionDrivers/codexDriver.js';
@@ -102,6 +103,7 @@ class SupervisedAgentService extends EventEmitter {
       const initial = await driver.runInitial({ taskId, worktreePath, prompt, model, effort });
       task.driverState.sessionId = initial.sessionId;
       await this._saveTask(task);
+      await commitPendingChanges(worktreePath);
 
       const diff = await getDiffStat(worktreePath, baseBranch);
       if (!diff) {
@@ -133,20 +135,24 @@ class SupervisedAgentService extends EventEmitter {
       if (verdict === 'APPROVE') {
         task.approvedSha = reviewedSha;
         await this._saveTask(task);
+        if (forbidsPublishing(task.prompt)) {
+          await this._emitStatus(task, 'approved-unpublished');
+          return;
+        }
         // Se pasa en memoria: tareas concurrentes pueden pisar la aprobación recién guardada en disco.
         await this.publishPR(task.taskId, task);
         return;
       }
 
-      if (verdict === 'REJECT') {
-        await this._emitStatus(task, 'escalated-rejected');
-        log.info(`Tarea ${task.taskId} rechazada por el revisor (problema grave) — sin reintento`);
+      // El revisor no pudo evaluar: no hay observaciones que el agente pueda corregir.
+      if (verdict === 'ERROR') {
+        task.lastError = notes;
+        await this._emitStatus(task, 'error');
         return;
       }
 
-      // FIX-NEEDED
       if (attempt >= MAX_RETRIES) {
-        await this._emitStatus(task, 'escalated-unresolved');
+        await this._emitStatus(task, verdict === 'REJECT' ? 'escalated-rejected' : 'escalated-unresolved');
         log.info(`Tarea ${task.taskId} agotó los reintentos de corrección`);
         return;
       }
@@ -163,6 +169,7 @@ class SupervisedAgentService extends EventEmitter {
       });
       task.driverState.sessionId = retry.sessionId || task.driverState.sessionId;
       await this._saveTask(task);
+      await commitPendingChanges(task.worktreePath);
     }
   }
 

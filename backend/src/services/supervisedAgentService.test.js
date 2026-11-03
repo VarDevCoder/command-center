@@ -3,12 +3,13 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { PATHS } from '../utils/paths.js';
-import { createWorktree, reviewWorktree } from './gitSupervision.js';
+import { createWorktree, forbidsPublishing, parseReviewVerdict, reviewWorktree } from './gitSupervision.js';
 import { createPr } from './prService.js';
-import { runInitial } from './providers/supervisionDrivers/claudeDriver.js';
+import { runInitial, runRetry } from './providers/supervisionDrivers/claudeDriver.js';
 import { supervisedAgentService as service } from './supervisedAgentService.js';
 import { violetService } from './violetService.js';
 import { listRepos } from './githubService.js';
+import { AgentManager } from './agentManager.js';
 
 vi.mock('../utils/paths.js', async (importOriginal) => {
   const actual = await importOriginal();
@@ -120,6 +121,159 @@ describe('pipeline supervisado', () => {
   });
 });
 
+describe('rechazos del revisor', () => {
+  const reviewer = { provider: 'codex', model: 'm', effort: 'max' };
+  const REJECTED = { verdict: 'REJECT', notes: 'VEREDICTO: REJECT\nFalta validar la entrada en a.js:3', reviewer };
+  const APPROVED = { verdict: 'APPROVE', notes: 'VEREDICTO: APPROVE', reviewer };
+
+  const run = async (taskId, prompt = 'arreglá algo') => {
+    const repo = makeRepo();
+    await service.runProtected({ taskId, projectDir: repo.dir, prompt, provider: 'claude', model: 'sonnet' });
+    return { ...repo, task: await service.getTask(taskId) };
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    reviewWorktree.mockReset();
+    runRetry.mockReset();
+    runInitial.mockImplementation(async (args) => commitInWorktree(args));
+    runRetry.mockImplementation(async () => ({ sessionId: 'sesion-1' }));
+  });
+
+  it('devuelve los motivos al desarrollador en el mismo worktree y publica si luego aprueba', async () => {
+    reviewWorktree.mockResolvedValueOnce(REJECTED).mockResolvedValueOnce(APPROVED);
+    runRetry.mockImplementationOnce(async ({ worktreePath }) => {
+      writeFileSync(join(worktreePath, 'correccion.txt'), 'ok');
+      git(worktreePath, 'add', '-A');
+      git(worktreePath, 'commit', '-m', 'correccion');
+      return { sessionId: 'sesion-1' };
+    });
+
+    const { task, bare } = await run('rechazo-corregido');
+
+    expect(runRetry).toHaveBeenCalledOnce();
+    expect(runRetry).toHaveBeenCalledWith(expect.objectContaining({ worktreePath: task.worktreePath, reviewNotes: REJECTED.notes }));
+    expect(reviewWorktree.mock.calls.map(([path]) => path)).toEqual([task.worktreePath, task.worktreePath]);
+    expect(task.status).toBe('pr-open');
+    expect(git(bare, 'ls-tree', '--name-only', 'claude/rechazo-corregido')).toContain('correccion.txt');
+  });
+
+  it('tras 2 correcciones fallidas no publica y Violet informa el motivo', async () => {
+    reviewWorktree.mockResolvedValue(REJECTED);
+
+    const { task, bare } = await run('rechazo-final');
+
+    expect(runRetry).toHaveBeenCalledTimes(2);
+    expect(reviewWorktree).toHaveBeenCalledTimes(3);
+    expect(task.status).toBe('escalated-rejected');
+    expect(createPr).not.toHaveBeenCalled();
+    expect(git(bare, 'branch', '--list', 'claude/rechazo-final')).toBe('');
+
+    const messages = [];
+    violetService.once('message', (m) => messages.push(m.text));
+    await violetService.onSupervisedStatusChange(task);
+    expect(messages[0]).toContain('Falta validar la entrada en a.js:3');
+    expect(messages[0]).toContain('Intentos de corrección: 2');
+  });
+
+  it('una corrección sin commitear se publica, en vez de la versión rechazada', async () => {
+    reviewWorktree.mockResolvedValueOnce(REJECTED).mockResolvedValueOnce(APPROVED);
+    runRetry.mockImplementationOnce(async ({ worktreePath }) => {
+      writeFileSync(join(worktreePath, 'correccion.txt'), 'ok');
+      return { sessionId: 'sesion-1' };
+    });
+
+    const { bare } = await run('sin-commitear');
+
+    expect(git(bare, 'ls-tree', '--name-only', 'claude/sin-commitear')).toContain('correccion.txt');
+  });
+
+  it('una primera pasada sin commitear no se pierde como "sin cambios"', async () => {
+    reviewWorktree.mockResolvedValue(APPROVED);
+    runInitial.mockImplementationOnce(async ({ worktreePath }) => {
+      writeFileSync(join(worktreePath, 'trabajo.txt'), 'hecho');
+      return { sessionId: 'sesion-1' };
+    });
+
+    const { task, bare } = await run('inicial-sin-commitear');
+
+    expect(task.status).toBe('pr-open');
+    expect(git(bare, 'ls-tree', '--name-only', 'claude/inicial-sin-commitear')).toContain('trabajo.txt');
+  });
+
+  it('respeta la prohibición de push al aprobar, y solo publica si el Jefe lo pide', async () => {
+    reviewWorktree.mockResolvedValue(APPROVED);
+
+    const { task, bare } = await run('sin-push', 'arreglá algo. No hagas push, no abras PR ni despliegues.');
+
+    expect(createPr).not.toHaveBeenCalled();
+    expect(git(bare, 'branch', '--list', 'claude/sin-push')).toBe('');
+    expect(task.status).toBe('approved-unpublished');
+    expect(task.lastError).toBeNull();
+
+    await service.publishPR('sin-push');
+    expect(createPr).toHaveBeenCalledOnce();
+  });
+
+  it('si el revisor no pudo evaluar no le pide correcciones al agente', async () => {
+    reviewWorktree.mockResolvedValue({ verdict: 'ERROR', notes: 'No se pudo revisar con Codex: límite de uso', reviewer });
+
+    const { task } = await run('revisor-caido');
+
+    expect(runRetry).not.toHaveBeenCalled();
+    expect(task.status).toBe('error');
+    expect(task.lastError).toContain('límite de uso');
+  });
+
+  it.each([
+    ['VEREDICTO: REJECT\nFalta validar', 'REJECT'],
+    ['Analicé el diff.\n\n**VEREDICTO:** APPROVE', 'APPROVE'],
+    ['VEREDICTO: FIX-NEEDED', 'FIX-NEEDED'],
+    ['No puedo dar APPROVE todavía', 'FIX-NEEDED'],
+    ['(sin respuesta)', 'FIX-NEEDED'],
+  ])('interpreta el veredicto de %j como %s', (reply, expected) => {
+    expect(parseReviewVerdict(reply)).toBe(expected);
+  });
+
+  it.each([
+    ['No hagas push ni despliegues.', true],
+    ['No despliegues, no hagas push, no cambies credenciales', true],
+    ['no instales nada ni hagas commit, push o despliegue', true],
+    ['No modifiques otros módulos, no hagas push, no abras PR ni despliegues.', true],
+    ['Corregilo sin abrir un pull request', true],
+    ['No publiques nada todavía', true],
+    ['Do not push this', true],
+    ['Corregí el bug y abrí un PR', false],
+    ['No toques el header. Después hacé push', false],
+    ['Arreglá el botón de publicar', false],
+  ])('detecta restricción de push en %j: %s', (prompt, expected) => {
+    expect(forbidsPublishing(prompt)).toBe(expected);
+  });
+});
+
+describe('estado visible del agente supervisado', () => {
+  const manager = new AgentManager();
+
+  it.each([
+    ['reviewing', 'active'],
+    ['retrying', 'active'],
+    ['no-changes', 'completed'],
+    ['approved-unpublished', 'completed'],
+    ['pr-open', 'completed'],
+    ['merged', 'completed'],
+    ['escalated-rejected', 'stopped'],
+    ['escalated-unresolved', 'stopped'],
+    ['publish-error', 'stopped'],
+    ['error', 'stopped'],
+  ])('%s se muestra como %s', (taskStatus, agentStatus) => {
+    manager.agents.set('t', { id: 't', status: 'spawning', logs: [] });
+
+    service.emit('statusChange', { taskId: 't', status: taskStatus });
+
+    expect(manager.get('t').status).toBe(agentStatus);
+  });
+});
+
 describe('Violet launch_agent', () => {
   const spawn = vi.fn(() => ({ id: 'agent-x' }));
 
@@ -135,6 +289,15 @@ describe('Violet launch_agent', () => {
 
     expect(listRepos).not.toHaveBeenCalled();
     expect(resolve(spawn.mock.calls[0][0].projectDir).toLowerCase()).toBe(resolve(dir).toLowerCase());
+  });
+
+  it('no duplica el aviso de una tarea supervisada', async () => {
+    const { dir } = makeRepo();
+    spawn.mockReturnValueOnce({ id: 'agent-supervisado', supervised: true });
+
+    await violetService._launchAgent({ dir, prompt: 'hacé algo' });
+
+    expect(violetService.watchedAgents.has('agent-supervisado')).toBe(false);
   });
 
   it('rechaza una ruta que no es un repo git', async () => {
