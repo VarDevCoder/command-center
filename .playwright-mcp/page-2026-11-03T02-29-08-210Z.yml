@@ -1,0 +1,39 @@
+- generic [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e5]: CMD CENTER
+    - navigation [ref=f1e13]:
+      - link "Control Panel" [ref=f1e14] [cursor=pointer]:
+        - /url: /
+      - link "Violet Violet" [ref=f1e21] [cursor=pointer]:
+        - /url: /violet
+        - img "Violet" [ref=f1e23]
+        - generic [ref=f1e24]: Violet
+      - link "Chats" [ref=f1e25] [cursor=pointer]:
+        - /url: /chats
+      - link "Mission" [ref=f1e30] [cursor=pointer]:
+        - /url: /launch
+      - link "Pull Requests" [ref=f1e37] [cursor=pointer]:
+        - /url: /pull-requests
+      - link "Agents & Costos" [ref=f1e43] [cursor=pointer]:
+        - /url: /operations
+      - link "History" [ref=f1e48] [cursor=pointer]:
+        - /url: /history
+    - paragraph [ref=f1e55]: v1.0.0
+  - generic [ref=f1e56]:
+    - banner [ref=f1e57]:
+      - generic [ref=f1e58]:
+        - heading "COMMAND CENTER" [level=1] [ref=f1e59]
+        - generic [ref=f1e60]: CONTROL PANEL
+      - generic [ref=f1e61]: 23:29:08
+      - generic [ref=f1e62]:
+        - link "0 Agents Running" [ref=f1e63] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f1e66]: OFFLINE
+    - main [ref=f1e75]:
+      - generic [ref=f1e76]:
+        - generic [ref=f1e77]:
+          - textbox "Buscar por tarea, proyecto, proveedor o estado..." [ref=f1e81]
+          - generic [ref=f1e82]: 0 / 0
+        - generic [ref=f1e83]:
+          - heading "Ejecuciones de agentes" [level=3] [ref=f1e85]
+          - paragraph [ref=f1e87]: Cargando ejecuciones...

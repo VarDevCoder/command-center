@@ -255,6 +255,20 @@ describe('estado visible del agente supervisado', () => {
   const manager = new AgentManager();
 
   it.each([
+    ['codex', undefined, 'gpt-6.1-sol'],
+    ['codex', 'sonnet', 'gpt-6.1-sol'],
+    ['codex', 'gpt-6-sol', 'gpt-6-sol'],
+    ['claude', 'sonnet', 'sonnet'],
+  ])('%s con modelo %s corre con %s', (provider, model, expected) => {
+    const runProtected = vi.spyOn(service, 'runProtected').mockResolvedValue();
+
+    manager.spawn({ prompt: 'arreglá algo', projectDir: 'x', provider, model });
+
+    expect(runProtected).toHaveBeenCalledWith(expect.objectContaining({ model: expected }));
+    runProtected.mockRestore();
+  });
+
+  it.each([
     ['reviewing', 'active'],
     ['retrying', 'active'],
     ['no-changes', 'completed'],

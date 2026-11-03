@@ -1,0 +1,78 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]: CMD CENTER
+    - navigation [ref=e12]:
+      - link "Bridge" [ref=e168] [cursor=pointer]:
+        - /url: /
+      - link "Violet Violet" [ref=e170] [cursor=pointer]:
+        - /url: /violet
+        - img "Violet" [ref=e21]
+        - generic [ref=e171]: Violet
+      - link "Chats" [ref=e172] [cursor=pointer]:
+        - /url: /chats
+      - link "Mission" [ref=e174] [cursor=pointer]:
+        - /url: /launch
+      - link "Pull Requests" [ref=e176] [cursor=pointer]:
+        - /url: /pull-requests
+      - link "Agents & Costos" [ref=e178] [cursor=pointer]:
+        - /url: /operations
+      - link "History" [ref=e180] [cursor=pointer]:
+        - /url: /history
+    - paragraph [ref=e182]: v1.0.0
+  - generic [ref=e47]:
+    - banner [ref=e48]:
+      - generic [ref=e49]:
+        - heading "COMMAND CENTER" [level=1] [ref=e50]
+        - generic [ref=e51]: CAPTAIN'S BRIDGE
+      - generic [ref=e52]: 22:55:56
+      - generic [ref=e53]:
+        - generic [ref=e54]:
+          - generic [ref=e57]: "1"
+          - generic [ref=e58]: live
+        - generic [ref=e59]: ONLINE
+    - main [ref=e68]:
+      - generic [ref=e69]:
+        - generic [ref=e70]:
+          - generic [ref=e74]:
+            - paragraph [ref=e75]: "1"
+            - paragraph [ref=e76]: Activos
+          - generic [ref=e80]:
+            - paragraph [ref=e81]: "1"
+            - paragraph [ref=e82]: Finalizados
+          - generic [ref=e87]:
+            - paragraph [ref=e88]: "1"
+            - paragraph [ref=e89]: Detenidos
+          - generic [ref=e93]:
+            - paragraph [ref=e94]: "0"
+            - paragraph [ref=e95]: Sessions
+        - generic [ref=e96]:
+          - generic [ref=e98]:
+            - heading "Agentes" [level=3] [ref=e100]
+            - generic [ref=e115]:
+              - button "DETENIDO agent-1 repo arregla el login ahora" [ref=e116] [cursor=pointer]:
+                - generic [ref=e117]:
+                  - generic [ref=e118]: DETENIDO
+                  - generic [ref=e121]: agent-1
+                - generic [ref=e122]: repo
+                - paragraph [ref=e126]: arregla el login
+                - generic [ref=e127]: ahora
+              - button "FINALIZADO agent-2 repo arregla el header. No hagas push ahora" [ref=e183] [cursor=pointer]:
+                - generic [ref=e134]:
+                  - generic [ref=e135]: FINALIZADO
+                  - generic [ref=e138]: agent-2
+                - generic [ref=e139]: repo
+                - paragraph [ref=e143]: arregla el header. No hagas push
+                - generic [ref=e144]: ahora
+              - button "ACTIVO agent-3 repo arregla el footer ahora" [ref=e184] [cursor=pointer]:
+                - generic [ref=e151]:
+                  - generic [ref=e152]: ACTIVO
+                  - generic [ref=e155]: agent-3
+                - generic [ref=e156]: repo
+                - paragraph [ref=e160]: arregla el footer
+                - generic [ref=e161]: ahora
+          - generic [ref=e103]:
+            - generic [ref=e104]:
+              - heading "Recent Sessions" [level=3] [ref=e105]
+              - link [ref=e106] [cursor=pointer]:
+                - /url: /history
+            - paragraph [ref=e110]: Sin sesiones registradas

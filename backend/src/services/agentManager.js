@@ -8,6 +8,8 @@ import { supervisedAgentService } from './supervisedAgentService.js';
 
 const log = createLogger('AgentMgr');
 
+const CODEX_DEFAULT_MODEL = 'gpt-6.1-sol';
+
 const SUPERVISED_AGENT_STATUS = {
   working: 'active',
   reviewing: 'active',
@@ -62,6 +64,9 @@ export class AgentManager extends EventEmitter {
    * pipeline supervisado (worktree + revisor + PR) en vez del modo directo.
    */
   spawn({ prompt, projectDir, provider = 'claude', model = 'sonnet', effort, allowedTools, resumeFrom, repoFullName }) {
+    // Violet y la API usan 'sonnet' por defecto, y Codex rechaza los modelos de Claude.
+    if (provider === 'codex' && /^(sonnet|opus|haiku)\b/i.test(model)) model = CODEX_DEFAULT_MODEL;
+
     const id = `agent-${++this.counter}-${Date.now()}`;
 
     const agentInfo = {

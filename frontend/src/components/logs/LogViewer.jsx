@@ -3,7 +3,7 @@ import { useRef, useEffect } from 'react';
 import LogEntry from './LogEntry.jsx';
 import { Terminal } from 'lucide-react';
 
-export default function LogViewer({ entries = [], className = '' }) {
+export default function LogViewer({ entries = [], className = '', emptyText = 'Esperando logs...' }) {
   const containerRef = useRef(null);
   const shouldAutoScroll = useRef(true);
 
@@ -27,7 +27,7 @@ export default function LogViewer({ entries = [], className = '' }) {
       <div className={`bg-bridge-950 rounded-lg border border-bridge-700 flex items-center justify-center ${className}`}>
         <div className="text-center text-bridge-500">
           <Terminal className="w-8 h-8 mx-auto mb-2 opacity-30" />
-          <p className="font-mono text-xs">Esperando logs...</p>
+          <p className="font-mono text-xs">{emptyText}</p>
         </div>
       </div>
     );

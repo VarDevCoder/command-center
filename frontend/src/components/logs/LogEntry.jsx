@@ -11,6 +11,8 @@ const TYPE_STYLES = {
   error: { prefix: '!', color: 'text-red-glow', bg: 'bg-red-glow/5' },
   output: { prefix: '|', color: 'text-bridge-300', bg: '' },
   progress: { prefix: '~', color: 'text-bridge-500', bg: '' },
+  system: { prefix: '#', color: 'text-cyan-glow', bg: '' },
+  review: { prefix: '[rev]', color: 'text-amber-glow', bg: '' },
 };
 
 export default function LogEntry({ entry }) {

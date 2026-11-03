@@ -17,7 +17,10 @@ const GLOW_MAP = {
 export default function AgentCard({ agent }) {
   const navigate = useNavigate();
   const glow = GLOW_MAP[agent.status] || GLOW_MAP.idle;
-  const lastLog = agent.logs?.at(-1);
+  // Última actividad mientras corre; al terminar, la tarea identifica mejor la ejecución.
+  const lastLog = agent.status === 'active'
+    ? agent.logs?.filter((log) => log.type !== 'system').at(-1)
+    : null;
 
   return (
     <button

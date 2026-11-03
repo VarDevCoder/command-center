@@ -25,7 +25,10 @@ export function run({ prompt, projectDir, model, effort, resumeFrom, sandbox }) 
     if (model) args.push('-m', model);
     // Codex CLI no tiene --effort; el nivel de razonamiento se setea vía override de config.
     if (effort) args.push('-c', `model_reasoning_effort=${effort}`);
-    if (sandbox) args.push('--sandbox', sandbox);
+    // `exec resume` no acepta --sandbox; sandbox_mode sirve para ambos.
+    if (sandbox) args.push('-c', `sandbox_mode="${sandbox}"`);
+    // --ignore-user-config descarta [windows] sandbox y sin eso Windows bloquea todo comando ("blocked by policy").
+    if (process.platform === 'win32') args.push('-c', 'windows.sandbox="elevated"');
 
     log.info(`codex ${args.join(' ')}`.slice(0, 150));
 

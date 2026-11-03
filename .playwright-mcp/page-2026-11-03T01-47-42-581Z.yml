@@ -1,0 +1,81 @@
+- generic [ref=f2e3]:
+  - complementary [ref=f2e4]:
+    - navigation [ref=f2e12]:
+      - link [ref=f2e13] [cursor=pointer]:
+        - /url: /
+      - link [ref=f2e19] [cursor=pointer]:
+        - /url: /violet
+        - img "Violet" [ref=f2e21]
+      - link [ref=f2e22] [cursor=pointer]:
+        - /url: /chats
+      - link [ref=f2e26] [cursor=pointer]:
+        - /url: /launch
+      - link [ref=f2e32] [cursor=pointer]:
+        - /url: /pull-requests
+      - link [ref=f2e37] [cursor=pointer]:
+        - /url: /operations
+      - link [ref=f2e41] [cursor=pointer]:
+        - /url: /history
+  - generic [ref=f2e47]:
+    - banner [ref=f2e48]:
+      - generic [ref=f2e49]:
+        - heading "COMMAND CENTER" [level=1] [ref=f2e50]
+        - generic [ref=f2e51]: CAPTAIN'S BRIDGE
+      - generic [ref=f2e52]: 22:47:42
+      - generic [ref=f2e53]:
+        - generic [ref=f2e54]:
+          - generic [ref=f2e57]: "2"
+          - generic [ref=f2e58]: live
+        - generic [ref=f2e59]: ONLINE
+    - main [ref=f2e68]:
+      - generic [ref=f2e69]:
+        - generic [ref=f2e70]:
+          - combobox [ref=f2e71]:
+            - option "Todos los proveedores" [selected]
+            - option "Claude"
+            - option "Codex"
+            - option "Ollama"
+          - combobox [ref=f2e72]:
+            - option "Todos los estados" [selected]
+            - option "Trabajando"
+            - option "Revisando"
+            - option "Corrigiendo"
+            - option "Sin cambios"
+            - option "Rechazado"
+            - option "Sin resolver"
+            - option "PR listo"
+            - option "Error al publicar"
+            - option "Mergeado"
+            - option "Error"
+        - generic [ref=f2e73]:
+          - button "repoclaude arregla el header. No hagas push ni abras PR Error al publicar ahora" [ref=f2e80]:
+            - generic [ref=f2e85]:
+              - paragraph [ref=f2e86]: repoclaude
+              - paragraph [ref=f2e87]: arregla el header. No hagas push ni abras PR
+            - generic [ref=f2e88]: Error al publicar
+            - generic [ref=f2e89]: ahora
+          - generic [ref=f2e90]:
+            - button "repoclaude arregla el login Rechazado ahora" [active] [ref=f2e91]:
+              - generic [ref=f2e96]:
+                - paragraph [ref=f2e97]: repoclaude
+                - paragraph [ref=f2e98]: arregla el login
+              - generic [ref=f2e99]: Rechazado
+              - generic [ref=f2e100]: ahora
+            - generic [ref=f2e101]:
+              - generic [ref=f2e102]:
+                - paragraph [ref=f2e103]: REJECT
+                - paragraph [ref=f2e104]: "VEREDICTO: REJECT Volvió a guardar el token en localStorage en auth.js:57."
+              - link "Ver detalle completo →" [ref=f2e106] [cursor=pointer]:
+                - /url: /agent/agent-1-1793670455008
+          - button "repoclaude arregla algo dos Error hace 21m" [ref=f2e108]:
+            - generic [ref=f2e113]:
+              - paragraph [ref=f2e114]: repoclaude
+              - paragraph [ref=f2e115]: arregla algo dos
+            - generic [ref=f2e116]: Error
+            - generic [ref=f2e117]: hace 21m
+          - button "repoclaude arregla algo uno Error hace 21m" [ref=f2e119]:
+            - generic [ref=f2e124]:
+              - paragraph [ref=f2e125]: repoclaude
+              - paragraph [ref=f2e126]: arregla algo uno
+            - generic [ref=f2e127]: Error
+            - generic [ref=f2e128]: hace 21m

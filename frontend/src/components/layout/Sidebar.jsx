@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 const NAV_ITEMS = [
-  { to: '/', icon: LayoutGrid, label: 'Bridge', end: true },
+  { to: '/', icon: LayoutGrid, label: 'Control Panel', end: true },
   { to: '/violet', icon: Sparkles, label: 'Violet' },
   { to: '/chats', icon: MessagesSquare, label: 'Chats' },
   { to: '/launch', icon: Rocket, label: 'Mission' },

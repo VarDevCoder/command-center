@@ -1,6 +1,7 @@
 // Barra superior — estilo mission control
 import { useState, useEffect } from 'react';
-import { Wifi, WifiOff, Activity } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { WifiOff, Activity } from 'lucide-react';
 import { useSocket } from '../../context/SocketContext.jsx';
 import { useAgents } from '../../hooks/useAgents.js';
 
@@ -23,7 +24,7 @@ export default function TopBar() {
           COMMAND CENTER
         </h1>
         <span className="text-[10px] font-mono text-bridge-500 bg-bridge-700 px-2 py-0.5 rounded">
-          CAPTAIN&apos;S BRIDGE
+          CONTROL PANEL
         </span>
       </div>
 
@@ -34,29 +35,21 @@ export default function TopBar() {
 
       {/* Derecha: status */}
       <div className="flex items-center gap-4">
-        {/* Agentes activos */}
-        <div className="flex items-center gap-2 text-sm font-mono">
+        <Link
+          to="/"
+          className="flex items-center gap-2 rounded text-sm font-mono text-bridge-300 hover:text-cyan-glow transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-glow"
+        >
           <Activity className="w-4 h-4 text-green-glow" />
-          <span className="text-bridge-300">
-            {activeCount}
-          </span>
-          <span className="text-bridge-500 text-xs">live</span>
-        </div>
+          {activeCount} {activeCount === 1 ? 'Agent' : 'Agents'} Running
+        </Link>
 
-        {/* Conexión Socket */}
-        <div className="flex items-center gap-1.5">
-          {connected ? (
-            <>
-              <Wifi className="w-4 h-4 text-green-glow" />
-              <span className="text-[10px] font-mono text-green-glow">ONLINE</span>
-            </>
-          ) : (
-            <>
-              <WifiOff className="w-4 h-4 text-red-glow" />
-              <span className="text-[10px] font-mono text-red-glow">OFFLINE</span>
-            </>
-          )}
-        </div>
+        {/* Sin conexión el conteo puede estar desactualizado */}
+        {!connected && (
+          <div className="flex items-center gap-1.5">
+            <WifiOff className="w-4 h-4 text-red-glow" />
+            <span className="text-[10px] font-mono text-red-glow">OFFLINE</span>
+          </div>
+        )}
       </div>
     </header>
   );

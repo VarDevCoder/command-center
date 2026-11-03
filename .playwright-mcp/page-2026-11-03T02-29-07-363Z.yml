@@ -1,0 +1,58 @@
+- generic [ref=e3]:
+  - complementary [ref=e4]:
+    - generic [ref=e5]: CMD CENTER
+    - navigation [ref=e13]:
+      - link "Control Panel" [ref=e14] [cursor=pointer]:
+        - /url: /
+      - link "Violet Violet" [ref=e21] [cursor=pointer]:
+        - /url: /violet
+        - img "Violet" [ref=e23]
+        - generic [ref=e24]: Violet
+      - link "Chats" [ref=e25] [cursor=pointer]:
+        - /url: /chats
+      - link "Mission" [ref=e30] [cursor=pointer]:
+        - /url: /launch
+      - link "Pull Requests" [ref=e37] [cursor=pointer]:
+        - /url: /pull-requests
+      - link "Agents & Costos" [ref=e43] [cursor=pointer]:
+        - /url: /operations
+      - link "History" [ref=e48] [cursor=pointer]:
+        - /url: /history
+    - paragraph [ref=e55]: v1.0.0
+  - generic [ref=e56]:
+    - banner [ref=e57]:
+      - generic [ref=e58]:
+        - heading "COMMAND CENTER" [level=1] [ref=e59]
+        - generic [ref=e60]: CONTROL PANEL
+      - generic [ref=e61]: 23:29:07
+      - link "0 Agents Running" [ref=e63] [cursor=pointer]:
+        - /url: /
+    - main [ref=e75]:
+      - generic [ref=e76]:
+        - generic [ref=e77]:
+          - generic [ref=e81]:
+            - paragraph [ref=e82]: "0"
+            - paragraph [ref=e83]: Activos
+          - generic [ref=e87]:
+            - paragraph [ref=e88]: "1"
+            - paragraph [ref=e89]: Finalizados
+          - generic [ref=e94]:
+            - paragraph [ref=e95]: "0"
+            - paragraph [ref=e96]: Detenidos
+          - generic [ref=e100]:
+            - paragraph [ref=e101]: "0"
+            - paragraph [ref=e102]: Sessions
+        - generic [ref=e103]:
+          - generic [ref=e104]:
+            - heading "Agentes" [level=3] [ref=e105]
+            - link "Ver todas las ejecuciones" [ref=e106] [cursor=pointer]:
+              - /url: /history
+          - 'button "FINALIZADO agent-1 repo Etapa: approved-unpublished hace 1m 35.3K" [ref=e112] [cursor=pointer]':
+            - generic [ref=e113]:
+              - generic [ref=e114]: FINALIZADO
+              - generic [ref=e117]: agent-1
+            - generic [ref=e118]: repo
+            - paragraph [ref=e122]: "Etapa: approved-unpublished"
+            - generic [ref=e123]:
+              - generic [ref=e124]: hace 1m
+              - generic [ref=e129]: 35.3K

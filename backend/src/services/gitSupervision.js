@@ -150,7 +150,7 @@ export async function commitPendingChanges(worktreePath) {
   const { stdout } = await execFileAsync('git', ['status', '--porcelain'], { cwd: worktreePath });
   if (!stdout.trim()) return;
   await execFileAsync('git', ['add', '-A'], { cwd: worktreePath });
-  await execFileAsync('git', ['commit', '-m', 'Cambios del agente sin commitear'], { cwd: worktreePath });
+  await execFileAsync('git', ['commit', '-m', 'Cambios del agente'], { cwd: worktreePath });
 }
 
 /**

@@ -1,0 +1,49 @@
+- generic [ref=f1e3]:
+  - complementary [ref=f1e4]:
+    - generic [ref=f1e5]: CMD CENTER
+    - navigation [ref=f1e13]:
+      - link "Bridge" [ref=f1e14] [cursor=pointer]:
+        - /url: /
+      - link "Violet Violet" [ref=f1e21] [cursor=pointer]:
+        - /url: /violet
+        - img "Violet" [ref=f1e23]
+        - generic [ref=f1e24]: Violet
+      - link "Chats" [ref=f1e25] [cursor=pointer]:
+        - /url: /chats
+      - link "Mission" [ref=f1e30] [cursor=pointer]:
+        - /url: /launch
+      - link "Pull Requests" [ref=f1e37] [cursor=pointer]:
+        - /url: /pull-requests
+      - link "Agents & Costos" [ref=f1e43] [cursor=pointer]:
+        - /url: /operations
+      - link "History" [ref=f1e48] [cursor=pointer]:
+        - /url: /history
+    - paragraph [ref=f1e55]: v1.0.0
+  - generic [ref=f1e56]:
+    - banner [ref=f1e57]:
+      - generic [ref=f1e58]:
+        - heading "COMMAND CENTER" [level=1] [ref=f1e59]
+        - generic [ref=f1e60]: CAPTAIN'S BRIDGE
+      - generic [ref=f1e61]: 22:55:57
+      - generic [ref=f1e62]:
+        - generic [ref=f1e63]:
+          - generic [ref=f1e66]: "0"
+          - generic [ref=f1e67]: live
+        - generic [ref=f1e68]: OFFLINE
+    - main [ref=f1e77]:
+      - generic [ref=f1e78]:
+        - generic [ref=f1e80]:
+          - button [ref=f1e81]
+          - generic [ref=f1e84]:
+            - generic [ref=f1e85]:
+              - generic [ref=f1e86]: IDLE
+              - heading "agent-2-1793670946190" [level=2] [ref=f1e89]
+            - generic [ref=f1e90]:
+              - generic [ref=f1e91]: unknown
+              - generic [ref=f1e94]: "--"
+              - generic [ref=f1e98]: 0 in / 0 out
+        - paragraph [ref=f1e106]: Esperando logs...
+        - generic [ref=f1e107]:
+          - generic [ref=f1e108]: $
+          - textbox "Agente no activo" [disabled] [ref=f1e109]
+          - button [disabled] [ref=f1e110]

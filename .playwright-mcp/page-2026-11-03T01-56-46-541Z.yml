@@ -1,0 +1,54 @@
+- generic [ref=f3e3]:
+  - complementary [ref=f3e4]:
+    - generic [ref=f3e5]: CMD CENTER
+    - navigation [ref=f3e13]:
+      - link "Bridge" [ref=f3e14] [cursor=pointer]:
+        - /url: /
+      - link "Violet Violet" [ref=f3e21] [cursor=pointer]:
+        - /url: /violet
+        - img "Violet" [ref=f3e23]
+        - generic [ref=f3e24]: Violet
+      - link "Chats" [ref=f3e25] [cursor=pointer]:
+        - /url: /chats
+      - link "Mission" [ref=f3e30] [cursor=pointer]:
+        - /url: /launch
+      - link "Pull Requests" [ref=f3e37] [cursor=pointer]:
+        - /url: /pull-requests
+      - link "Agents & Costos" [ref=f3e43] [cursor=pointer]:
+        - /url: /operations
+      - link "History" [ref=f3e48] [cursor=pointer]:
+        - /url: /history
+    - paragraph [ref=f3e55]: v1.0.0
+  - generic [ref=f3e56]:
+    - banner [ref=f3e57]:
+      - generic [ref=f3e58]:
+        - heading "COMMAND CENTER" [level=1] [ref=f3e59]
+        - generic [ref=f3e60]: CAPTAIN'S BRIDGE
+      - generic [ref=f3e61]: 22:56:46
+      - generic [ref=f3e62]:
+        - generic [ref=f3e63]:
+          - generic [ref=f3e66]: "0"
+          - generic [ref=f3e67]: live
+        - generic [ref=f3e68]: OFFLINE
+    - main [ref=f3e77]:
+      - generic [ref=f3e78]:
+        - generic [ref=f3e79]:
+          - combobox [ref=f3e80]:
+            - option "Todos los proveedores" [selected]
+            - option "Claude"
+            - option "Codex"
+            - option "Ollama"
+          - combobox [ref=f3e81]:
+            - option "Todos los estados" [selected]
+            - option "Trabajando"
+            - option "Revisando"
+            - option "Corrigiendo"
+            - option "Sin cambios"
+            - option "Rechazado"
+            - option "Sin resolver"
+            - option "Finalizado sin publicar"
+            - option "PR listo"
+            - option "Error al publicar"
+            - option "Mergeado"
+            - option "Error"
+        - paragraph [ref=f3e83]: Sin tareas supervisadas todavía

@@ -7,12 +7,13 @@ export function useAgents() {
   const { socket } = useSocket();
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Carga inicial via REST
   useEffect(() => {
     agentApi.list()
       .then(setAgents)
-      .catch(() => setAgents([]))
+      .catch((err) => setError(err.message))
       .finally(() => setLoading(false));
   }, []);
 
@@ -20,7 +21,10 @@ export function useAgents() {
   useEffect(() => {
     if (!socket) return;
 
-    const onList = (list) => setAgents(list);
+    const onList = (list) => {
+      setAgents(list);
+      setError(null);
+    };
 
     const onSpawned = (agent) => {
       setAgents((prev) => [...prev, agent]);
@@ -63,5 +67,5 @@ export function useAgents() {
     (a) => a.status === 'active' || a.status === 'spawning'
   ).length;
 
-  return { agents, loading, refresh, activeCount };
+  return { agents, loading, error, refresh, activeCount };
 }

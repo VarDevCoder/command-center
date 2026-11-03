@@ -1,4 +1,4 @@
-// Dashboard principal — Captain's Bridge
+// Pantalla principal — Control Panel
 import { useState, useEffect } from 'react';
 import { Activity, Clock, MessageSquare, Zap, ArrowRight, Rocket } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -6,13 +6,13 @@ import { useAgents } from '../hooks/useAgents.js';
 import AgentGrid from '../components/agents/AgentGrid.jsx';
 import Card from '../components/common/Card.jsx';
 import { sessionApi } from '../services/api.js';
-import { timeAgo, projectName } from '../utils/formatters.js';
+
+const RECENT_AGENTS = 12;
 
 export default function BridgePage() {
   const { agents, loading } = useAgents();
   const [sessions, setSessions] = useState([]);
 
-  // Cargar sesiones recientes
   useEffect(() => {
     sessionApi.list(100)
       .then(setSessions)
@@ -22,7 +22,9 @@ export default function BridgePage() {
   const activeAgents = agents.filter((a) => a.status === 'active' || a.status === 'spawning');
   const completedAgents = agents.filter((a) => a.status === 'completed');
   const errorAgents = agents.filter((a) => a.status === 'error' || a.status === 'stopped');
-  const recentSessions = sessions.slice(0, 8);
+  const recentAgents = [...agents]
+    .sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt))
+    .slice(0, RECENT_AGENTS);
 
   return (
     <div className="space-y-6">
@@ -34,52 +36,23 @@ export default function BridgePage() {
         <StatCard icon={MessageSquare} label="Sessions" value={sessions.length} color="text-purple-glow" />
       </div>
 
-      {/* Contenido principal: agentes + sesiones recientes */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 items-start">
-        <div className="xl:col-span-2">
-          <Card title="Agentes">
-            <div className="p-4">
-              {loading ? (
-                <div className="text-center py-8 font-mono text-sm text-bridge-500">
-                  Cargando agentes...
-                </div>
-              ) : agents.length === 0 ? (
-                <EmptyAgents />
-              ) : (
-                <AgentGrid agents={agents} />
-              )}
+      <Card title="Agentes" action={
+        <Link to="/history" aria-label="Ver todas las ejecuciones" className="text-bridge-500 hover:text-cyan-glow transition-colors">
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+      }>
+        <div className="p-4">
+          {loading ? (
+            <div className="text-center py-8 font-mono text-sm text-bridge-500">
+              Cargando agentes...
             </div>
-          </Card>
+          ) : agents.length === 0 ? (
+            <EmptyAgents />
+          ) : (
+            <AgentGrid agents={recentAgents} />
+          )}
         </div>
-
-        <Card title="Recent Sessions" action={
-          <Link to="/history" className="text-bridge-500 hover:text-cyan-glow transition-colors">
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
-        }>
-          <div className="divide-y divide-bridge-700/60 max-h-[520px] overflow-auto">
-            {recentSessions.length === 0 ? (
-              <p className="px-4 py-6 text-center font-mono text-xs text-bridge-500">
-                Sin sesiones registradas
-              </p>
-            ) : (
-              recentSessions.map((s) => (
-                <Link
-                  key={s.sessionId}
-                  to={`/history?session=${s.sessionId}`}
-                  className="block px-4 py-3 hover:bg-bridge-800/60 transition-colors"
-                >
-                  <p className="text-sm text-bridge-200 truncate">{s.preview || s.sessionId}</p>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="font-mono text-[10px] text-bridge-500">{projectName(s.project)}</span>
-                    <span className="font-mono text-[10px] text-bridge-500">{timeAgo(s.timestamp)}</span>
-                  </div>
-                </Link>
-              ))
-            )}
-          </div>
-        </Card>
-      </div>
+      </Card>
     </div>
   );
 }

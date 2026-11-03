@@ -1,0 +1,96 @@
+- generic [ref=f3e3]:
+  - complementary [ref=f3e4]:
+    - generic [ref=f3e5]: CMD CENTER
+    - navigation [ref=f3e13]:
+      - link "Bridge" [ref=f3e14] [cursor=pointer]:
+        - /url: /
+      - link "Violet Violet" [ref=f3e21] [cursor=pointer]:
+        - /url: /violet
+        - img "Violet" [ref=f3e23]
+        - generic [ref=f3e24]: Violet
+      - link "Chats" [ref=f3e25] [cursor=pointer]:
+        - /url: /chats
+      - link "Mission" [ref=f3e30] [cursor=pointer]:
+        - /url: /launch
+      - link "Pull Requests" [ref=f3e37] [cursor=pointer]:
+        - /url: /pull-requests
+      - link "Agents & Costos" [ref=f3e43] [cursor=pointer]:
+        - /url: /operations
+      - link "History" [ref=f3e48] [cursor=pointer]:
+        - /url: /history
+    - paragraph [ref=f3e55]: v1.0.0
+  - generic [ref=f3e56]:
+    - banner [ref=f3e57]:
+      - generic [ref=f3e58]:
+        - heading "COMMAND CENTER" [level=1] [ref=f3e59]
+        - generic [ref=f3e60]: CAPTAIN'S BRIDGE
+      - generic [ref=f3e61]: 22:56:50
+      - generic [ref=f3e62]:
+        - generic [ref=f3e63]:
+          - generic [ref=f3e66]: "1"
+          - generic [ref=f3e67]: live
+        - generic [ref=f3e68]: ONLINE
+    - main [ref=f3e77]:
+      - generic [ref=f3e78]:
+        - generic [ref=f3e79]:
+          - combobox [ref=f3e80]:
+            - option "Todos los proveedores" [selected]
+            - option "Claude"
+            - option "Codex"
+            - option "Ollama"
+          - combobox [ref=f3e81]:
+            - option "Todos los estados" [selected]
+            - option "Trabajando"
+            - option "Revisando"
+            - option "Corrigiendo"
+            - option "Sin cambios"
+            - option "Rechazado"
+            - option "Sin resolver"
+            - option "Finalizado sin publicar"
+            - option "PR listo"
+            - option "Error al publicar"
+            - option "Mergeado"
+            - option "Error"
+        - generic [ref=f3e82]:
+          - button "repoclaude arregla el footer Error hace 1m" [ref=f3e99]:
+            - generic [ref=f3e104]:
+              - paragraph [ref=f3e105]: repoclaude
+              - paragraph [ref=f3e106]: arregla el footer
+            - generic [ref=f3e107]: Error
+            - generic [ref=f3e108]: hace 1m
+          - button "repoclaude arregla el header. No hagas push Finalizado sin publicar hace 1m" [ref=f3e84]:
+            - generic [ref=f3e89]:
+              - paragraph [ref=f3e90]: repoclaude
+              - paragraph [ref=f3e91]: arregla el header. No hagas push
+            - generic [ref=f3e92]: Finalizado sin publicar
+            - generic [ref=f3e93]: hace 1m
+          - button "repoclaude arregla el login Error hace 1m" [ref=f3e111]:
+            - generic [ref=f3e116]:
+              - paragraph [ref=f3e117]: repoclaude
+              - paragraph [ref=f3e118]: arregla el login
+            - generic [ref=f3e119]: Error
+            - generic [ref=f3e120]: hace 1m
+          - button "repoclaude arregla el header. No hagas push ni abras PR Error al publicar hace 9m" [ref=f3e122]:
+            - generic [ref=f3e127]:
+              - paragraph [ref=f3e128]: repoclaude
+              - paragraph [ref=f3e129]: arregla el header. No hagas push ni abras PR
+            - generic [ref=f3e130]: Error al publicar
+            - generic [ref=f3e131]: hace 9m
+          - button "repoclaude arregla el login Rechazado hace 9m" [ref=f3e133]:
+            - generic [ref=f3e138]:
+              - paragraph [ref=f3e139]: repoclaude
+              - paragraph [ref=f3e140]: arregla el login
+            - generic [ref=f3e141]: Rechazado
+            - generic [ref=f3e142]: hace 9m
+          - button "repoclaude arregla algo dos Error hace 30m" [ref=f3e144]:
+            - generic [ref=f3e149]:
+              - paragraph [ref=f3e150]: repoclaude
+              - paragraph [ref=f3e151]: arregla algo dos
+            - generic [ref=f3e152]: Error
+            - generic [ref=f3e153]: hace 30m
+          - button "repoclaude arregla algo uno Error hace 30m" [ref=f3e155]:
+            - generic [ref=f3e160]:
+              - paragraph [ref=f3e161]: repoclaude
+              - paragraph [ref=f3e162]: arregla algo uno
+            - generic [ref=f3e163]: Error
+            - generic [ref=f3e164]: hace 30m

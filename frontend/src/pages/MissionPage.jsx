@@ -19,7 +19,7 @@ const QUICK_MISSIONS = [
 // Proveedores disponibles para lanzar agentes
 const PROVIDERS = {
   claude: { label: 'Claude', models: ['haiku', 'sonnet', 'opus'], efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
-  codex: { label: 'Codex / GPT', models: ['gpt-5.4'], efforts: ['none', 'low', 'medium', 'high', 'xhigh'] },
+  codex: { label: 'Codex / GPT', models: ['gpt-6.1-sol', 'gpt-6-sol', 'gpt-5.6-sol'], efforts: ['low', 'medium', 'high', 'xhigh', 'max'] },
   ollama: { label: 'Ollama (local)', models: ['qwen2.5-coder:7b', 'qwen2.5vl:7b', 'qwen2.5vl:32b'], efforts: null },
 };
 
@@ -231,6 +231,11 @@ export default function MissionPage() {
                 </option>
               ))}
             </select>
+            {selectedProject?.clonedLocally && (
+              <p className="text-[10px] font-mono text-bridge-500 mt-1.5 break-all">
+                Carpeta: {selectedProject.dir}
+              </p>
+            )}
           </div>
 
           {/* Proveedor */}

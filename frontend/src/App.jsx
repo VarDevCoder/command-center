@@ -19,7 +19,6 @@ export default function App() {
         <Route path="agent/:agentId" element={<AgentDetailPage />} />
         <Route path="launch" element={<MissionPage />} />
         <Route path="history" element={<HistoryPage />} />
-        <Route path="history/:sessionId" element={<AgentDetailPage />} />
         <Route path="violet" element={<VioletPage />} />
         <Route path="violet/profile" element={<VioletProfilePage />} />
         <Route path="chats" element={<ChatsPage />} />
