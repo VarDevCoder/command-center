@@ -4,3 +4,8 @@ backend/data/
 .env
 *.log
 .DS_Store
+
+# Modelos 3D privados: nunca van al repo
+*.vrm
+# Salida local del navegador de pruebas
+.playwright-mcp/
