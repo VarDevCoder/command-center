@@ -176,7 +176,7 @@ export default function VioletPage() {
     <div className="flex flex-col lg:flex-row gap-4 h-full max-w-6xl mx-auto">
       <aside
         aria-label="Avatar 3D de Violet"
-        className="shrink-0 h-56 w-full lg:order-last lg:h-auto lg:w-96 lg:aspect-square lg:self-start overflow-hidden rounded-lg border border-bridge-700 bg-bridge-900"
+        className="shrink-0 h-56 w-full lg:order-last lg:h-auto lg:w-80 xl:w-[28rem] lg:aspect-[4/3] lg:self-start overflow-hidden rounded-lg border border-bridge-700 bg-bridge-900"
       >
         <Suspense fallback={<p className="flex h-full items-center justify-center text-[10px] font-mono text-bridge-500">Cargando avatar...</p>}>
           <VioletAvatar3D state={avatarState} onLoadEnd={handleAvatarLoadEnd} />
