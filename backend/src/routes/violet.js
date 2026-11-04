@@ -1,9 +1,15 @@
 // Rutas de chat con Violet
 import { Router } from 'express';
 import { z } from 'zod';
+import { stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { violetService } from '../services/violetService.js';
+import { isLoopback } from '../utils/isLoopback.js';
 
 const router = Router();
+
+const DEFAULT_AVATAR_PATH = join(homedir(), 'command-center-data', 'violet-avatar', 'violet.vrm');
 
 const imageSchema = z.object({
   name: z.string().min(1).max(200),
@@ -40,6 +46,28 @@ router.get('/attachments/:fileName', async (req, res, next) => {
     }
     next(err);
   }
+});
+
+/**
+ * GET /api/v1/violet/avatar.vrm — modelo privado, solo para este equipo: el
+ * servidor escucha en toda la red y el archivo vive fuera del repo.
+ */
+router.get('/avatar.vrm', async (req, res, next) => {
+  res.set('Cache-Control', 'no-store');
+  if (!isLoopback(req.socket.remoteAddress)) {
+    return res.status(403).json({ success: false, error: { message: 'Solo disponible desde este equipo' } });
+  }
+
+  const avatarPath = resolve(process.env.VIOLET_AVATAR_PATH || DEFAULT_AVATAR_PATH);
+  try {
+    if (!(await stat(avatarPath)).isFile()) throw new Error('No es un archivo');
+  } catch {
+    return res.status(404).json({ success: false, error: { message: 'Avatar no encontrado' } });
+  }
+
+  res.type('application/octet-stream').sendFile(avatarPath, { cacheControl: false, dotfiles: 'allow' }, (err) => {
+    if (err && !res.headersSent) next(err);
+  });
 });
 
 /**

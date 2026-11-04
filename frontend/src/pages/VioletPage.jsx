@@ -1,13 +1,22 @@
 // Chat con Violet — coordinadora personal (cerebro: Codex / cuenta ChatGPT)
-import { useState, useEffect, useRef } from 'react';
+import { lazy, Suspense, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ImagePlus, Send, X } from 'lucide-react';
 import { violetApi } from '../services/api.js';
 import { useSocket } from '../context/SocketContext.jsx';
 import Card from '../components/common/Card.jsx';
 import VioletAvatar from '../components/common/VioletAvatar.jsx';
+import VioletAvatarFallback from '../components/violet/VioletAvatarFallback.jsx';
 import toast from 'react-hot-toast';
 
+const VioletAvatar3D = lazy(() =>
+  import('../components/violet/VioletAvatar3D.jsx').catch(() => ({ default: VioletAvatarFallback }))
+);
+
+const GREETING_MS = 4000;
+const TALKING_MS_PER_CHAR = 60;
+const TALKING_MIN_MS = 1500;
+const TALKING_MAX_MS = 12000;
 const DRAFT_KEY = 'violet-draft';
 const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -43,8 +52,29 @@ export default function VioletPage() {
   const [sending, setSending] = useState(false);
   const [images, setImages] = useState([]);
   const [toolCall, setToolCall] = useState(null);
+  const [greeting, setGreeting] = useState(true);
+  const [talking, setTalking] = useState(false);
+  const talkingTimerRef = useRef(null);
+  const greetingTimerRef = useRef(null);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  let avatarState = 'idle';
+  if (sending) avatarState = 'thinking';
+  else if (talking) avatarState = 'talking';
+  else if (greeting) avatarState = 'greeting';
+  else if (input.trim()) avatarState = 'listening';
+
+  // El saludo cuenta desde que el modelo cargó: si no, se consume durante la descarga y no se ve.
+  const handleAvatarLoadEnd = () => {
+    clearTimeout(greetingTimerRef.current);
+    greetingTimerRef.current = setTimeout(() => setGreeting(false), GREETING_MS);
+  };
+
+  useEffect(() => () => {
+    clearTimeout(talkingTimerRef.current);
+    clearTimeout(greetingTimerRef.current);
+  }, []);
 
   useEffect(() => {
     try {
@@ -63,7 +93,15 @@ export default function VioletPage() {
     if (!socket) return;
     const onMessage = (msg) => {
       setMessages((prev) => [...prev, msg]);
-      if (msg.role === 'violet') setToolCall(null);
+      if (msg.role !== 'violet') return;
+      setToolCall(null);
+      const duration = Math.min(
+        Math.max((msg.text?.length || 0) * TALKING_MS_PER_CHAR, TALKING_MIN_MS),
+        TALKING_MAX_MS
+      );
+      clearTimeout(talkingTimerRef.current);
+      setTalking(true);
+      talkingTimerRef.current = setTimeout(() => setTalking(false), duration);
     };
     const onToolCall = (payload) => setToolCall(payload);
 
@@ -135,8 +173,16 @@ export default function VioletPage() {
   };
 
   return (
-    <div className="flex flex-col h-full max-w-3xl mx-auto">
-      <Card className="flex-1 flex flex-col min-h-0">
+    <div className="flex flex-col lg:flex-row gap-4 h-full max-w-6xl mx-auto">
+      <aside
+        aria-label="Avatar 3D de Violet"
+        className="shrink-0 h-56 w-full lg:order-last lg:h-auto lg:w-80 xl:w-[28rem] lg:aspect-[4/3] lg:self-start overflow-hidden rounded-lg border border-bridge-700 bg-bridge-900"
+      >
+        <Suspense fallback={<p className="flex h-full items-center justify-center text-[10px] font-mono text-bridge-500">Cargando avatar...</p>}>
+          <VioletAvatar3D state={avatarState} onLoadEnd={handleAvatarLoadEnd} />
+        </Suspense>
+      </aside>
+      <Card className="flex-1 flex flex-col min-h-0 min-w-0">
         <div className="flex items-center gap-3 px-4 py-3 border-b border-bridge-700">
           <Link to="/violet/profile" className="flex w-full items-center gap-3 rounded-lg hover:text-purple-glow focus-visible:outline-2 focus-visible:outline-purple-glow" aria-label="Ver perfil de Violet">
             <VioletAvatar />
@@ -229,7 +275,10 @@ export default function VioletPage() {
           </button>
           <input
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setGreeting(false);
+            }}
             onPaste={handlePaste}
             placeholder="Escribile o pegá una imagen con Ctrl+V..."
             disabled={sending}
