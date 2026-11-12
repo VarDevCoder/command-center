@@ -18,6 +18,7 @@ import { SessionWatcher } from './services/sessionWatcher.js';
 import { AgentManager } from './services/agentManager.js';
 import { repoLocator } from './services/repoLocator.js';
 import { violetService } from './services/violetService.js';
+import { whatsappService } from './services/whatsappService.js';
 import { repoChatService } from './services/repoChatService.js';
 import { ollamaAgentService } from './services/ollamaAgentService.js';
 import { supervisedAgentService } from './services/supervisedAgentService.js';
@@ -25,6 +26,8 @@ import { createLogger } from './utils/logger.js';
 
 const log = createLogger('Server');
 const PORT = process.env.PORT || 3066;
+// Sin login: lanzar un agente equivale a ejecutar comandos en esta PC, así que nada fuera de ella puede llegar.
+const HOST = '127.0.0.1';
 
 // Express
 const app = express();
@@ -151,10 +154,13 @@ supervisedAgentService.on('merged', (payload) => io.emit('supervised:merged', pa
 sessionWatcher.start();
 repoLocator.startScan();
 
-httpServer.listen(PORT, () => {
-  log.info(`Command Center backend en http://localhost:${PORT}`);
+httpServer.listen(PORT, HOST, () => {
+  log.info(`Command Center backend en http://${HOST}:${PORT}`);
   log.info(`Socket.IO listo para conexiones`);
 });
+
+whatsappService.start({ violet: violetService, agentManager })
+  .catch((err) => log.error(`No se pudo iniciar WhatsApp: ${err.message}`));
 
 // Cleanup al cerrar
 process.on('SIGINT', async () => {

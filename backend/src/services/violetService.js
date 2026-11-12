@@ -5,7 +5,7 @@ import { spawn } from 'node:child_process';
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { join, resolve, relative, isAbsolute } from 'node:path';
 import { homedir } from 'node:os';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { createLogger } from '../utils/logger.js';
 import { PATHS } from '../utils/paths.js';
@@ -21,6 +21,10 @@ const ATTACHMENTS_DIR = process.env.COMMAND_CENTER_DATA_DIR
   ? join(process.env.COMMAND_CENTER_DATA_DIR, 'violet-attachments')
   : join(process.cwd(), 'data', 'violet-attachments');
 const MAX_TOOL_TURNS = 5;
+// Fuera de la PC, un texto malicioso leído por el modelo no puede disparar estas acciones solo.
+const REMOTE_CONFIRMATION_TOOLS = new Set(['launch_agent', 'open_vscode_project', 'stop_vscode_turn']);
+const REMOTE_CONFIRMATION_MS = 5 * 60 * 1000;
+const WHATSAPP_INSTRUCTIONS = 'Canal actual: WhatsApp. Respondé breve y en texto plano. launch_agent, open_vscode_project y stop_vscode_turn quedan retenidas hasta que el Jefe las autorice: el sistema le pide un código directamente a él. Vos nunca lo conocés, no se lo pidas ni afirmes que la acción ya se hizo.';
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const IMAGE_TYPES = {
   'image/png': { extension: 'png', signature: (b) => b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) },
@@ -190,7 +194,7 @@ class VioletService extends EventEmitter {
    * el backend la ejecuta y le devuelve el resultado, iterando hasta que
    * responda en texto normal o se alcance el límite de turnos.
    */
-  async send(text, images = []) {
+  async send(text, images = [], channel = 'web') {
     await this._loaded;
     if (this.busy) {
       throw new Error('Violet ya está respondiendo, esperá un momento');
@@ -204,6 +208,7 @@ class VioletService extends EventEmitter {
         role: 'user',
         text,
         attachments: storedImages.map((image) => image.public),
+        channel,
         timestamp: new Date().toISOString(),
       };
       this.messages.push(userMsg);
@@ -213,7 +218,8 @@ class VioletService extends EventEmitter {
       // primero del thread): Codex no garantiza recordar instrucciones de
       // herramientas entre turnos resumidos de la misma forma que un modelo
       // con ventana de contexto completa.
-      let prompt = `${SYSTEM_PROMPT}\n\n${userText}`;
+      const channelInstructions = channel === 'whatsapp' ? `${WHATSAPP_INSTRUCTIONS}\n\n` : '';
+      let prompt = `${SYSTEM_PROMPT}\n\n${channelInstructions}${userText}`;
       let finalReply = '';
 
       for (let turn = 0; turn < MAX_TOOL_TURNS; turn++) {
@@ -237,7 +243,7 @@ class VioletService extends EventEmitter {
         }
 
         this.emit('toolCall', { tool: toolCall.tool, args: toolCall, timestamp: new Date().toISOString() });
-        const result = await this._executeTool(toolCall);
+        const result = await this._executeTool(toolCall, channel);
         prompt = `Tool result: ${result}`;
 
         if (turn === MAX_TOOL_TURNS - 1) {
@@ -245,7 +251,7 @@ class VioletService extends EventEmitter {
         }
       }
 
-      const violetMsg = { role: 'violet', text: finalReply, timestamp: new Date().toISOString() };
+      const violetMsg = { role: 'violet', text: finalReply, channel, timestamp: new Date().toISOString() };
       this.messages.push(violetMsg);
       this.emit('message', violetMsg);
       await this._saveHistory();
@@ -253,6 +259,31 @@ class VioletService extends EventEmitter {
     } finally {
       this.busy = false;
     }
+  }
+
+  // El resumen sale de los argumentos reales, no de lo que el modelo diga que va a hacer.
+  _holdForConfirmation(toolCall) {
+    const code = String(randomInt(100000, 1000000));
+    this.pendingAction = { toolCall, code, expiresAt: Date.now() + REMOTE_CONFIRMATION_MS };
+    const { tool, ...args } = toolCall;
+    const details = Object.entries(args).map(([key, value]) => `${key}: ${String(value).slice(0, 600)}`).join('\n');
+    this.emit('confirmationRequired', { code, summary: `${tool}\n${details}` });
+    return 'Acción retenida, todavía NO se ejecutó: el sistema le pidió autorización al Jefe.';
+  }
+
+  async confirmPendingAction(code) {
+    const pending = this.pendingAction;
+    this.pendingAction = null;
+    if (!pending) return 'No hay ninguna acción pendiente.';
+    if (Date.now() > pending.expiresAt) return 'Ese código venció: pedile la acción de nuevo a Violet.';
+    if (code !== pending.code) return 'Código incorrecto: descarté la acción por seguridad.';
+    return this._executeTool(pending.toolCall);
+  }
+
+  cancelPendingAction() {
+    const hadAction = Boolean(this.pendingAction);
+    this.pendingAction = null;
+    return hadAction ? 'Acción descartada.' : 'No hay ninguna acción pendiente.';
   }
 
   _parseToolCall(text) {
@@ -272,7 +303,10 @@ class VioletService extends EventEmitter {
     return null;
   }
 
-  async _executeTool(toolCall) {
+  async _executeTool(toolCall, channel = 'web') {
+    if (channel === 'whatsapp' && REMOTE_CONFIRMATION_TOOLS.has(toolCall.tool)) {
+      return this._holdForConfirmation(toolCall);
+    }
     try {
       if (toolCall.tool === 'read_repo') return await this._readRepo(toolCall.repo, toolCall.path || '.');
       if (toolCall.tool === 'read_vault') return await this._readVault(toolCall.path || '.');

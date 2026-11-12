@@ -6,14 +6,17 @@
   "scripts": {
     "dev": "nodemon src/index.js",
     "start": "node src/index.js",
-    "test": "vitest run"
+    "test": "vitest run",
+    "whatsapp:link": "node scripts/whatsapp-link.js"
   },
   "dependencies": {
+    "@whiskeysockets/baileys": "7.0.0-rc14",
     "chokidar": "^4.0.0",
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "helmet": "^8.0.0",
     "node-pty": "^1.1.0",
+    "qrcode-terminal": "0.12.0",
     "socket.io": "^4.8.0",
     "tree-kill": "^1.2.2",
     "zod": "^3.24.1"
