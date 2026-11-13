@@ -7,6 +7,7 @@ import { useSocket } from '../context/SocketContext.jsx';
 import Card from '../components/common/Card.jsx';
 import VioletAvatar from '../components/common/VioletAvatar.jsx';
 import VioletAvatarFallback from '../components/violet/VioletAvatarFallback.jsx';
+import { speechDurationMs } from '../components/violet/violetSpeech.js';
 import toast from 'react-hot-toast';
 
 const VioletAvatar3D = lazy(() =>
@@ -14,9 +15,6 @@ const VioletAvatar3D = lazy(() =>
 );
 
 const GREETING_MS = 4000;
-const TALKING_MS_PER_CHAR = 60;
-const TALKING_MIN_MS = 1500;
-const TALKING_MAX_MS = 12000;
 const DRAFT_KEY = 'violet-draft';
 const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
@@ -54,13 +52,14 @@ export default function VioletPage() {
   const [toolCall, setToolCall] = useState(null);
   const [greeting, setGreeting] = useState(true);
   const [talking, setTalking] = useState(false);
+  const [speech, setSpeech] = useState(null);
   const talkingTimerRef = useRef(null);
   const greetingTimerRef = useRef(null);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
 
   let avatarState = 'idle';
-  if (sending) avatarState = 'thinking';
+  if (sending) avatarState = toolCall ? 'working' : 'thinking';
   else if (talking) avatarState = 'talking';
   else if (greeting) avatarState = 'greeting';
   else if (input.trim()) avatarState = 'listening';
@@ -95,13 +94,10 @@ export default function VioletPage() {
       setMessages((prev) => [...prev, msg]);
       if (msg.role !== 'violet') return;
       setToolCall(null);
-      const duration = Math.min(
-        Math.max((msg.text?.length || 0) * TALKING_MS_PER_CHAR, TALKING_MIN_MS),
-        TALKING_MAX_MS
-      );
       clearTimeout(talkingTimerRef.current);
+      setSpeech({ text: msg.text || '' });
       setTalking(true);
-      talkingTimerRef.current = setTimeout(() => setTalking(false), duration);
+      talkingTimerRef.current = setTimeout(() => setTalking(false), speechDurationMs(msg.text));
     };
     const onToolCall = (payload) => setToolCall(payload);
 
@@ -179,7 +175,7 @@ export default function VioletPage() {
         className="shrink-0 h-56 w-full lg:order-last lg:h-auto lg:w-80 xl:w-[28rem] lg:aspect-[4/3] lg:self-start overflow-hidden rounded-lg border border-bridge-700 bg-bridge-900"
       >
         <Suspense fallback={<p className="flex h-full items-center justify-center text-[10px] font-mono text-bridge-500">Cargando avatar...</p>}>
-          <VioletAvatar3D state={avatarState} onLoadEnd={handleAvatarLoadEnd} />
+          <VioletAvatar3D state={avatarState} speech={speech} onLoadEnd={handleAvatarLoadEnd} />
         </Suspense>
       </aside>
       <Card className="flex-1 flex flex-col min-h-0 min-w-0">

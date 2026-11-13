@@ -34,7 +34,8 @@
       "Bash(node -e ' *)",
       "Bash(grep -n \"SYSTEM_PROMPT = \" backend/src/services/violetService.js)",
       "Bash(curl -s -m 60 -X POST http://localhost:3066/api/v1/violet/chat -H \"Content-Type: application/json\" -d '{\"text\":\"test2\"}' -w \"\\\\nHTTP:%{http_code}\\\\n\")",
-      "Bash(curl -s -m 60 -X POST http://localhost:3066/api/v1/violet/chat -H \"Content-Type: application/json\" -d '{\"text\":\"Usá tu herramienta read_repo para leer la raiz del repo command-center. Devolveme la lista de archivos.\"}' -w \"\\\\nHTTP:%{http_code} TIME:%{time_total}s\\\\n\")"
+      "Bash(curl -s -m 60 -X POST http://localhost:3066/api/v1/violet/chat -H \"Content-Type: application/json\" -d '{\"text\":\"Usá tu herramienta read_repo para leer la raiz del repo command-center. Devolveme la lista de archivos.\"}' -w \"\\\\nHTTP:%{http_code} TIME:%{time_total}s\\\\n\")",
+      "ClaudeInChromeDomain(claude.ai)"
     ]
   }
 }
