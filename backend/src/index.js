@@ -1,6 +1,9 @@
 // Servidor principal: Express + Socket.IO — Command Center
 import express from 'express';
 import { createServer } from 'node:http';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Server } from 'socket.io';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -14,6 +17,7 @@ import supervisedTasksRouter from './routes/supervisedTasks.js';
 import vscodeAgentsRouter from './routes/vscodeAgents.js';
 import usageRouter from './routes/usage.js';
 import { errorHandler } from './middlewares/errorHandler.js';
+import { isAllowed, remoteAccessEnabled, requireAccess } from './middlewares/remoteAccess.js';
 import { SessionWatcher } from './services/sessionWatcher.js';
 import { AgentManager } from './services/agentManager.js';
 import { repoLocator } from './services/repoLocator.js';
@@ -26,11 +30,14 @@ import { createLogger } from './utils/logger.js';
 
 const log = createLogger('Server');
 const PORT = process.env.PORT || 3066;
-// Sin login: lanzar un agente equivale a ejecutar comandos en esta PC, así que nada fuera de ella puede llegar.
+// Sin login propio: lanzar un agente equivale a ejecutar comandos en esta PC. De afuera solo se
+// llega por el túnel de Cloudflare, y requireAccess exige su login en cada pedido.
 const HOST = '127.0.0.1';
+const FRONTEND_DIST = fileURLToPath(new URL('../../frontend/dist', import.meta.url));
 
 // Express
 const app = express();
+app.use(requireAccess);
 app.use(cors({ origin: ['http://localhost:5166', 'http://localhost:5173'] }));
 app.use(helmet({ contentSecurityPolicy: false }));
 // Las imágenes de Violet viajan como base64. El límite sigue siendo acotado
@@ -45,6 +52,9 @@ const io = new Server(httpServer, {
   cors: {
     origin: ['http://localhost:5166', 'http://localhost:5173'],
     methods: ['GET', 'POST'],
+  },
+  allowRequest: (req, callback) => {
+    isAllowed(req.headers).then((allowed) => callback(null, allowed), () => callback(null, false));
   },
 });
 
@@ -76,6 +86,12 @@ app.get('/api/v1/health', (req, res) => {
     },
   });
 });
+
+// Interfaz compilada (cd frontend && npm run build): una sola dirección sirve todo.
+if (existsSync(join(FRONTEND_DIST, 'index.html'))) {
+  app.use(express.static(FRONTEND_DIST));
+  app.get(/^\/(?!api\/|socket\.io\/)/, (req, res) => res.sendFile(join(FRONTEND_DIST, 'index.html')));
+}
 
 // Error handler
 app.use(errorHandler);
@@ -157,6 +173,9 @@ repoLocator.startScan();
 httpServer.listen(PORT, HOST, () => {
   log.info(`Command Center backend en http://${HOST}:${PORT}`);
   log.info(`Socket.IO listo para conexiones`);
+  log.info(remoteAccessEnabled
+    ? 'Acceso remoto: solo con login de Cloudflare Access'
+    : 'Acceso remoto desactivado: solo se atiende a esta PC');
 });
 
 whatsappService.start({ violet: violetService, agentManager })
