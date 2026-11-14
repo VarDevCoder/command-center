@@ -81,6 +81,7 @@ export class AgentManager extends EventEmitter {
       startedAt: new Date().toISOString(),
       logs: [],
       sessionId: null,
+      result: null,
       tokensIn: 0,
       tokensOut: 0,
     };
@@ -106,6 +107,7 @@ export class AgentManager extends EventEmitter {
           const a = this.agents.get(id);
           if (!a) return;
           a.sessionId = threadId;
+          a.result = replyText;
           this.addLog(id, {
             type: 'assistant',
             content: replyText,

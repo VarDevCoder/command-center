@@ -15,7 +15,8 @@ const CLAUDE_EXE = process.env.CLAUDE_CLI_PATH || (process.platform === 'win32'
  * y usa manager.addLog / manager.serialize / manager.emit para notificar.
  */
 export function spawnClaude(manager, { id, prompt, projectDir, model = 'sonnet', effort, allowedTools, resumeFrom }) {
-  const args = ['--print', '--dangerously-skip-permissions'];
+  // stream-json: sin él no se conoce el id de sesión (no se puede retomar) ni el consumo.
+  const args = ['--print', '--output-format', 'stream-json', '--verbose', '--dangerously-skip-permissions'];
 
   if (resumeFrom) {
     args.unshift('--resume', resumeFrom);
@@ -95,31 +96,37 @@ export function spawnClaude(manager, { id, prompt, projectDir, model = 'sonnet',
   });
 }
 
-function handleOutput(manager, agentId, line) {
+export function handleOutput(manager, agentId, line) {
   const agent = manager.agents.get(agentId);
   if (!agent) return;
+  const addLog = (entry) => manager.addLog(agentId, { ...entry, timestamp: new Date().toISOString() });
 
+  let data;
   try {
-    const data = JSON.parse(line);
-
-    if (data.session_id && !agent.sessionId) {
-      agent.sessionId = data.session_id;
-    }
-
-    manager.addLog(agentId, {
-      type: data.type || 'output',
-      content: data.content || data.text || line,
-      timestamp: new Date().toISOString(),
-      raw: data,
-    });
+    data = JSON.parse(line);
   } catch {
-    if (line.trim()) {
-      manager.addLog(agentId, {
-        type: 'output',
-        content: line,
-        timestamp: new Date().toISOString(),
-      });
+    addLog({ type: 'output', content: line });
+    return;
+  }
+
+  if (data.session_id) agent.sessionId = data.session_id;
+
+  if (data.type === 'assistant') {
+    for (const block of data.message?.content ?? []) {
+      if (block.type === 'text' && block.text?.trim()) addLog({ type: 'assistant', content: block.text });
+      if (block.type === 'tool_use') {
+        addLog({ type: 'tool_use', toolName: block.name, content: JSON.stringify(block.input ?? {}).slice(0, 300) });
+      }
     }
+    return;
+  }
+
+  if (data.type === 'result') {
+    agent.result = data.result || agent.result;
+    const usage = data.usage ?? {};
+    agent.tokensIn += (usage.input_tokens ?? 0) + (usage.cache_read_input_tokens ?? 0) + (usage.cache_creation_input_tokens ?? 0);
+    agent.tokensOut += usage.output_tokens ?? 0;
+    if (data.is_error) addLog({ type: 'error', content: data.result || 'Claude Code terminó con error' });
   }
 }
 

@@ -1,6 +1,6 @@
 // Conexión a WhatsApp como dispositivo vinculado: sale de esta PC y no abre puertos.
 // Las claves viven fuera del repo y equivalen a tu sesión de WhatsApp.
-import { mkdir, readFile } from 'node:fs/promises';
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PATHS } from '../utils/paths.js';
 
@@ -27,6 +27,11 @@ export async function isLinked() {
   }
 }
 
+// Un intento de vinculación a medias deja credenciales que WhatsApp rechaza con 401 en el siguiente.
+export async function discardUnfinishedLink() {
+  if (!(await isLinked())) await rm(AUTH_DIR, { recursive: true, force: true });
+}
+
 /**
  * La librería se carga recién acá: sin WhatsApp vinculado, el backend ni la importa.
  */
@@ -46,7 +51,8 @@ export async function connectWhatsApp({ onConnectionUpdate, onMessages }) {
     ...(version ? { version } : {}),
     auth: state,
     logger: silentLogger,
-    browser: Browsers.windows('Command Center'),
+    // Tiene que ser un navegador que WhatsApp conozca: con otro nombre rechaza la vinculación por código.
+    browser: Browsers.windows('Chrome'),
     // Si figurara "en línea", tu celular dejaría de mostrar notificaciones.
     markOnlineOnConnect: false,
     syncFullHistory: false,

@@ -2,7 +2,7 @@
 // Sin QR, con un código para tipear en el celular: npm run whatsapp:link -- 595981000001
 // Con el backend apagado: dos conexiones con la misma sesión se expulsan entre sí.
 import qrcode from 'qrcode-terminal';
-import { connectWhatsApp } from '../src/services/whatsappSocket.js';
+import { connectWhatsApp, discardUnfinishedLink } from '../src/services/whatsappSocket.js';
 
 const phone = (process.argv[2] ?? '').replace(/\D/g, '');
 
@@ -43,4 +43,5 @@ function start() {
   });
 }
 
+await discardUnfinishedLink();
 await start();

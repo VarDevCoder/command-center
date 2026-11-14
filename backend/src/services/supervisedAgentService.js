@@ -102,6 +102,7 @@ class SupervisedAgentService extends EventEmitter {
 
       const initial = await driver.runInitial({ taskId, worktreePath, prompt, model, effort });
       task.driverState.sessionId = initial.sessionId;
+      task.lastReply = initial.replyText?.slice(0, 4000) || null;
       await this._saveTask(task);
       await commitPendingChanges(worktreePath);
 
@@ -115,6 +116,52 @@ class SupervisedAgentService extends EventEmitter {
       await this._runReviewCycle(task, driver);
     } catch (err) {
       log.error(`Error en tarea supervisada ${taskId}: ${err.message}`);
+      task.lastError = err.message;
+      await this._emitStatus(task, 'error');
+    }
+  }
+
+  /**
+   * Retoma una tarea terminada con un pedido nuevo: misma conversación del agente y mismo
+   * worktree, y lo que cambie vuelve a pasar por el revisor. Devuelve el motivo si no se puede.
+   */
+  async continueTask(taskId, message) {
+    const task = await this.getTask(taskId);
+    if (!task) return 'esa tarea no existe';
+    if (['working', 'reviewing', 'retrying'].includes(task.status)) return 'esa tarea todavía está trabajando';
+    if (task.pr) return 'esa tarea ya tiene un PR publicado; lanzá una tarea nueva con launch_agent';
+    if (task.provider === 'ollama' || !task.worktreePath || !task.driverState?.sessionId) {
+      return 'esa tarea no dejó una conversación que se pueda retomar; lanzá una nueva con launch_agent';
+    }
+
+    this._continue(task, DRIVERS[task.provider], message);
+    return null;
+  }
+
+  async _continue(task, driver, message) {
+    try {
+      task.lastError = null;
+      await this._emitStatus(task, 'working');
+      const reply = await driver.runRetry({
+        taskId: task.taskId,
+        worktreePath: task.worktreePath,
+        sessionId: task.driverState.sessionId,
+        message,
+        model: task.model,
+        effort: task.effort,
+      });
+      task.driverState.sessionId = reply.sessionId || task.driverState.sessionId;
+      task.lastReply = reply.replyText?.slice(0, 4000) || task.lastReply;
+      await this._saveTask(task);
+      await commitPendingChanges(task.worktreePath);
+
+      if (!(await getDiffStat(task.worktreePath, task.baseBranch))) {
+        await this._emitStatus(task, 'no-changes');
+        return;
+      }
+      await this._runReviewCycle(task, driver);
+    } catch (err) {
+      log.error(`Error retomando la tarea ${task.taskId}: ${err.message}`);
       task.lastError = err.message;
       await this._emitStatus(task, 'error');
     }
@@ -168,6 +215,7 @@ class SupervisedAgentService extends EventEmitter {
         effort: task.effort,
       });
       task.driverState.sessionId = retry.sessionId || task.driverState.sessionId;
+      task.lastReply = retry.replyText?.slice(0, 4000) || task.lastReply;
       await this._saveTask(task);
       await commitPendingChanges(task.worktreePath);
     }

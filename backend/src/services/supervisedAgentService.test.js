@@ -11,6 +11,9 @@ import { violetService } from './violetService.js';
 import { listRepos } from './githubService.js';
 import { AgentManager } from './agentManager.js';
 
+// Los avisos de Violet pasan por Codex; acá no hay Codex, así que sale el texto del sistema.
+violetService._runCodex = async () => { throw new Error('Codex no disponible en los tests'); };
+
 vi.mock('../utils/paths.js', async (importOriginal) => {
   const actual = await importOriginal();
   const { mkdtempSync: mkdtemp } = await import('node:fs');

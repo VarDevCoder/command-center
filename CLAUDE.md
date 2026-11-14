@@ -22,7 +22,7 @@ cd frontend && npm run dev  # Inicia frontend en :5166
 - Violet solo atiende el chat "Mensajes a mí mismo". El resto de tus chats llega descifrado a la librería, y el código lo descarta sin usarlo ni guardarlo.
 - La sesión vive en `~/command-center-data/whatsapp/`, nunca en este repo público.
 - Vincular, con el backend apagado: `cd backend && npm run whatsapp:link`, y escanear el QR con tu WhatsApp.
-- Por WhatsApp, lanzar o detener agentes pide `CONFIRMAR <código>`; el modelo nunca conoce ese código.
+- Por WhatsApp, lanzar o detener agentes queda retenido hasta que respondas "Sí" a "¿Autorizás? Sí / No". Esa respuesta la lee el código, no el modelo, y los mensajes de Violet nunca cuentan como respuesta.
 
 ## Arquitectura
 - Backend lee `~/.claude/projects/` para sesiones JSONL

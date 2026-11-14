@@ -14,8 +14,9 @@ export async function runInitial({ worktreePath, prompt, model, effort }) {
   return { sessionId, replyText };
 }
 
-export async function runRetry({ worktreePath, sessionId, reviewNotes, model, effort }) {
-  const prompt = `El revisor encontró problemas en tu trabajo. Corregilos en este mismo worktree:\n\n${reviewNotes}${COMMIT_INSTRUCTION}`;
+// Con `message` es un pedido nuevo del Jefe sobre la misma conversación, no una corrección del revisor.
+export async function runRetry({ worktreePath, sessionId, reviewNotes, message, model, effort }) {
+  const prompt = `${message || `El revisor encontró problemas en tu trabajo. Corregilos en este mismo worktree:\n\n${reviewNotes}`}${COMMIT_INSTRUCTION}`;
   const { sessionId: newSessionId, replyText } = await runClaudeOnceDetailed({
     prompt,
     projectDir: worktreePath,

@@ -45,8 +45,8 @@ export class WhatsAppService {
         this._send(message.text);
       }
     });
-    violet.on('confirmationRequired', ({ code, summary }) => {
-      this._send(`Quiero hacer esto:\n\n${summary}\n\nPara autorizarlo respondé: CONFIRMAR ${code}\nPara descartarlo: CANCELAR\nVence en 5 minutos.`);
+    violet.on('confirmationRequired', ({ summary }) => {
+      this._send(`Quiero hacer esto:\n\n${summary}\n\n¿Autorizás? Sí / No`);
     });
 
     await this._connect();
@@ -135,10 +135,15 @@ export class WhatsAppService {
   // Estas órdenes las resuelve el código: nunca pasan por el modelo.
   async _runCommand(text) {
     if (text.toLowerCase() === '/stop') return this._stopAgents();
-    if (text.toUpperCase() === 'CANCELAR') return this.violet.cancelPendingAction();
-    const confirmation = text.match(/^CONFIRMAR\s+(\d{6})$/i);
-    if (confirmation) return this.violet.confirmPendingAction(confirmation[1]);
-    return null;
+    if (!this.violet.hasPendingAction()) return null;
+
+    // Con una acción retenida, tu próximo mensaje es la respuesta. Las respuestas de Violet
+    // nunca llegan hasta acá (marca + ID), así que el modelo no puede decir que sí por vos.
+    const answer = text.toLowerCase().replace(/[^a-záéíóú]/g, '');
+    if (['si', 'sí', 'dale', 'ok', 'autorizo'].includes(answer)) return this.violet.confirmPendingAction();
+    const dismissed = this.violet.cancelPendingAction();
+    // Si escribiste otra cosa, la acción se descarta (un "sí" posterior no la revive) y el mensaje sigue su curso.
+    return ['no', 'cancelar'].includes(answer) ? dismissed : null;
   }
 
   async _stopAgents() {

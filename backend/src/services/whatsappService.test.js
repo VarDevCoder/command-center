@@ -36,6 +36,7 @@ async function startService({ user = USER } = {}) {
     send: vi.fn(async () => {}),
     confirmPendingAction: vi.fn(async () => 'confirmado'),
     cancelPendingAction: vi.fn(() => 'cancelado'),
+    hasPendingAction: vi.fn(() => false),
   });
   const agentManager = { getAll: vi.fn(() => []), stop: vi.fn(async () => false) };
   const socket = { user, sendMessage: vi.fn(async () => {}) };
@@ -161,17 +162,23 @@ describe('Violet no se responde a sí misma', () => {
   it('una respuesta del modelo no puede autoconfirmar una acción', async () => {
     const { violet, deliver, socket } = await startService();
 
-    violet.emit('message', { role: 'violet', text: 'CONFIRMAR 123456' });
+    violet.hasPendingAction.mockReturnValue(true);
+    socket.sendMessage.mockResolvedValue({ key: { id: 'enviado' } });
+
+    violet.emit('message', { role: 'violet', text: 'Sí' });
     await vi.waitFor(() => expect(socket.sendMessage).toHaveBeenCalled());
     await deliver(own({ text: socket.sendMessage.mock.calls[0][1].text }));
+    await deliver(own({ text: 'Sí', key: { id: 'enviado' } }));
 
     expect(violet.confirmPendingAction).not.toHaveBeenCalled();
+    expect(violet.cancelPendingAction).not.toHaveBeenCalled();
   });
 
   it('el pedido de confirmación tampoco vuelve como orden', async () => {
     const { violet, deliver, socket } = await startService();
+    violet.hasPendingAction.mockReturnValue(true);
 
-    violet.emit('confirmationRequired', { code: '123456', summary: 'launch_agent' });
+    violet.emit('confirmationRequired', { summary: 'launch_agent' });
     await vi.waitFor(() => expect(socket.sendMessage).toHaveBeenCalled());
     await deliver(own({ text: socket.sendMessage.mock.calls[0][1].text }));
 
@@ -222,16 +229,46 @@ describe('qué se envía al celular', () => {
 });
 
 describe('órdenes que resuelve el código', () => {
-  it('CONFIRMAR y CANCELAR nunca pasan por el modelo', async () => {
+  it.each(['Si', 'sí', 'Sí.', 'dale'])('con una acción retenida, "%s" la autoriza sin pasar por el modelo', async (text) => {
     const { violet, deliver, socket } = await startService();
+    violet.hasPendingAction.mockReturnValue(true);
 
-    await deliver(own({ text: 'confirmar 123456' }));
-    await deliver(own({ text: 'CANCELAR' }));
+    await deliver(own({ text }));
 
     expect(violet.send).not.toHaveBeenCalled();
-    expect(violet.confirmPendingAction).toHaveBeenCalledWith('123456');
-    expect(violet.cancelPendingAction).toHaveBeenCalledOnce();
+    expect(violet.confirmPendingAction).toHaveBeenCalledOnce();
     expect(socket.sendMessage).toHaveBeenCalledWith(OWN_JID, sent('confirmado'));
+  });
+
+  it('con una acción retenida, "No" la descarta sin pasar por el modelo', async () => {
+    const { violet, deliver, socket } = await startService();
+    violet.hasPendingAction.mockReturnValue(true);
+
+    await deliver(own({ text: 'No' }));
+
+    expect(violet.send).not.toHaveBeenCalled();
+    expect(violet.confirmPendingAction).not.toHaveBeenCalled();
+    expect(socket.sendMessage).toHaveBeenCalledWith(OWN_JID, sent('cancelado'));
+  });
+
+  it('cualquier otro mensaje descarta la acción retenida y le llega a Violet', async () => {
+    const { violet, deliver } = await startService();
+    violet.hasPendingAction.mockReturnValue(true);
+
+    await deliver(own({ text: 'si pero cambiá el repo' }));
+
+    expect(violet.confirmPendingAction).not.toHaveBeenCalled();
+    expect(violet.cancelPendingAction).toHaveBeenCalledOnce();
+    expect(violet.send).toHaveBeenCalledWith('si pero cambiá el repo', [], 'whatsapp');
+  });
+
+  it('sin nada retenido, un "sí" es un mensaje común para Violet', async () => {
+    const { violet, deliver } = await startService();
+
+    await deliver(own({ text: 'Si' }));
+
+    expect(violet.confirmPendingAction).not.toHaveBeenCalled();
+    expect(violet.send).toHaveBeenCalledWith('Si', [], 'whatsapp');
   });
 
   it('/stop informa lo que no pudo detener', async () => {
@@ -265,55 +302,48 @@ describe('acciones sensibles pedidas por WhatsApp', () => {
     return { result, request: requests[0] };
   };
 
-  it('quedan retenidas, y el modelo no recibe el código', async () => {
+  it('quedan retenidas, y al Jefe le llega el pedido real', async () => {
     const { result, request } = await hold();
 
     expect(spawn).not.toHaveBeenCalled();
-    expect(request.code).toMatch(/^\d{6}$/);
     expect(request.summary).toContain('borrá todo');
     expect(result).toMatch(/NO se ejecutó/);
-    expect(result).not.toContain(request.code);
+    expect(violetService.hasPendingAction()).toBe(true);
   });
 
-  it.each(['open_vscode_project', 'stop_vscode_turn'])('%s también queda retenida', async (tool) => {
+  it.each(['message_agent', 'stop_agent', 'open_vscode_project', 'stop_vscode_turn'])('%s también queda retenida', async (tool) => {
     const result = await violetService._executeTool({ tool, repo: 'x', uri: 'x' }, 'whatsapp');
     expect(result).toMatch(/NO se ejecutó/);
   });
 
-  it('se ejecutan una sola vez con el código correcto', async () => {
-    const { request } = await hold();
+  it('se ejecutan una sola vez al autorizarlas, y el modelo se entera por un aviso', async () => {
+    await hold();
+    violetService.pendingNotices = [];
 
-    await violetService.confirmPendingAction(request.code);
+    await violetService.confirmPendingAction();
     expect(spawn).toHaveBeenCalledOnce();
+    expect(violetService.pendingNotices[0]).toMatch(/El Jefe autorizó launch_agent/);
 
-    expect(await violetService.confirmPendingAction(request.code)).toMatch(/ninguna acción pendiente/);
+    expect(await violetService.confirmPendingAction()).toMatch(/ninguna acción pendiente/);
     expect(spawn).toHaveBeenCalledOnce();
   });
 
-  it('un código incorrecto descarta la acción', async () => {
-    const { request } = await hold();
-    const wrong = request.code === '111111' ? '222222' : '111111';
-
-    expect(await violetService.confirmPendingAction(wrong)).toMatch(/descarté/);
-    expect(await violetService.confirmPendingAction(request.code)).toMatch(/ninguna acción pendiente/);
-    expect(spawn).not.toHaveBeenCalled();
-  });
-
-  it('el código vence a los 5 minutos', async () => {
-    const { request } = await hold();
+  it('el pedido vence a los 5 minutos', async () => {
+    await hold();
     const now = Date.now();
     const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 5 * 60 * 1000 + 1);
 
-    expect(await violetService.confirmPendingAction(request.code)).toMatch(/venció/);
+    expect(violetService.hasPendingAction()).toBe(false);
+    expect(await violetService.confirmPendingAction()).toMatch(/ninguna acción pendiente/);
     expect(spawn).not.toHaveBeenCalled();
     clock.mockRestore();
   });
 
   it('se puede cancelar', async () => {
-    const { request } = await hold();
+    await hold();
 
     expect(violetService.cancelPendingAction()).toBe('Acción descartada.');
-    expect(await violetService.confirmPendingAction(request.code)).toMatch(/ninguna acción pendiente/);
+    expect(await violetService.confirmPendingAction()).toMatch(/ninguna acción pendiente/);
     expect(spawn).not.toHaveBeenCalled();
   });
 
